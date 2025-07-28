@@ -144,7 +144,7 @@ async function uploadReel(page, videoPath, caption) {
 
 async function main() {
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: "new",
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
 
