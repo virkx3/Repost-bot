@@ -1,54 +1,111 @@
-// Dual-context Instagram Bot
-
 const puppeteer = require("puppeteer");
 const fs = require("fs");
-const path = require("path");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
-const delay = ms => new Promise(res => setTimeout(res, ms));
-
-const VIDEO_DIR = "downloads";
-const COOKIES_FILE = "session.json";
-const WATERMARK = "ig/ramn_preet05";
+const path = require("path");
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
-if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
 
-async function launchContexts() {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  });
+const INSTAGRAM_URL = "https://www.instagram.com";
+const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
+const WATERMARK = "ig/ramn_preet05";
+const VIDEO_DIR = "downloads";
 
-  const desktopContext = await browser.createIncognitoBrowserContext();
-  const desktopPage = await desktopContext.newPage();
-  await desktopPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
+if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
 
-  const mobileContext = await browser.createIncognitoBrowserContext();
-  const mobilePage = await mobileContext.newPage();
-  await mobilePage.setUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1");
-  await mobilePage.setViewport({ width: 390, height: 844, isMobile: true, deviceScaleFactor: 3 });
-
-  if (fs.existsSync(COOKIES_FILE)) {
-    const cookies = JSON.parse(fs.readFileSync(COOKIES_FILE, "utf8"));
-    await desktopPage.setCookie(...cookies);
-    await mobilePage.setCookie(...cookies);
-  }
-
-  return { browser, desktopPage, mobilePage };
+function getRandomCaption() {
+  const captions = fs.readFileSync("caption.txt", "utf8").split("\n").filter(Boolean);
+  return captions[Math.floor(Math.random() * captions.length)];
 }
 
-async function downloadReel(page, reelUrl, outPath) {
-  await page.goto(reelUrl, { waitUntil: "networkidle2", timeout: 30000 });
-  await page.waitForSelector("video", { timeout: 15000 });
-  const videoUrl = await page.$eval("video", el => el.src);
+function getRandomHashtags(count = 15) {
+  const tags = fs.readFileSync("hashtag.txt", "utf8").split("\n").filter(Boolean);
+  const selected = [];
+  while (selected.length < count && tags.length) {
+    const index = Math.floor(Math.random() * tags.length);
+    selected.push(tags.splice(index, 1)[0]);
+  }
+  return selected.join(" ");
+}
 
-  if (!videoUrl || videoUrl.startsWith("blob:")) throw new Error("No valid video URL");
+async function fetchUsernames() {
+  const res = await axios.get(USERNAMES_URL);
+  return res.data.split("\n").map(u => u.trim()).filter(Boolean);
+}
 
-  const response = await axios({ url: videoUrl, method: "GET", responseType: "arraybuffer" });
-  fs.writeFileSync(outPath, response.data);
-  return outPath;
+async function getDirectVideoUrl(page) {
+  try {
+    // Method 1: Get from meta tags
+    const metaVideo = await page.$eval('meta[property="og:video"]', el => el.content);
+    if (metaVideo && !metaVideo.startsWith('blob:')) return metaVideo;
+
+    // Method 2: Extract from JSON in script tags
+    const scriptData = await page.$$eval('script[type="application/ld+json"]', scripts => {
+      for (const script of scripts) {
+        try {
+          const data = JSON.parse(script.text);
+          if (data?.video?.contentUrl) return data.video.contentUrl;
+        } catch {}
+      }
+      return null;
+    });
+    if (scriptData) return scriptData;
+
+    // Method 3: Find the highest quality video source
+    const sources = await page.$$eval('video source', sources => 
+      sources.map(s => s.src).filter(src => src && !src.startsWith('blob:'))
+    );
+    if (sources.length) return sources[0];
+    
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function downloadReel(page, username) {
+  try {
+    const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
+    await page.goto(profileUrl, { waitUntil: "networkidle2", timeout: 30000 });
+    await delay(5000);
+
+    const links = await page.$$eval("a", as =>
+      as.map(a => a.href).filter(href => href.includes("/reel/"))
+    );
+
+    if (!links.length) return null;
+    const randomReel = links[Math.floor(Math.random() * links.length)];
+    await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
+    await delay(5000);
+
+    // Get direct video URL
+    const videoUrl = await getDirectVideoUrl(page);
+    if (!videoUrl) {
+      console.log("❌ Failed to find direct video URL");
+      return null;
+    }
+
+    const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+    const response = await axios({
+      url: videoUrl,
+      method: 'GET',
+      responseType: 'stream',
+      timeout: 60000
+    });
+
+    const writer = fs.createWriteStream(outPath);
+    response.data.pipe(writer);
+    
+    return new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(outPath));
+      writer.on('error', reject);
+    });
+  } catch (err) {
+    console.error("❌ Download failed:", err.message);
+    return null;
+  }
 }
 
 function addWatermark(inputPath, outputPath) {
@@ -65,8 +122,8 @@ function addWatermark(inputPath, outputPath) {
           y: "(h-text_h)-10",
           box: 1,
           boxcolor: "black@0.5",
-          boxborderw: 5
-        }
+          boxborderw: 5,
+        },
       })
       .output(outputPath)
       .on("end", () => resolve(outputPath))
@@ -76,42 +133,193 @@ function addWatermark(inputPath, outputPath) {
 }
 
 async function uploadReel(page, videoPath, caption) {
-  await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2", timeout: 60000 });
-  await delay(7000);
+  console.log("\u23EB Uploading reel:", videoPath);
+  
+  try {
+    // Reload homepage to ensure clean state
+    await page.goto("https://www.instagram.com/", { 
+      waitUntil: "networkidle2", 
+      timeout: 60000 
+    });
+    await delay(7000);
 
-  const fileInput = await page.$('input[type="file"]');
-  if (fileInput) await fileInput.uploadFile(videoPath);
-  else throw new Error("File input not found");
+    // Improved new post button detection
+    const newPostSelectors = [
+      '[aria-label="New post"]',
+      '[aria-label="Create new post"]',
+      'div[role="button"]:has(> div > svg[aria-label="New post"])',
+      'svg[aria-label="New post"]',
+      'button:has(> svg[aria-label="New post"])'
+    ];
 
-  await delay(8000);
+    let postButtonFound = false;
+    for (const selector of newPostSelectors) {
+      try {
+        await page.waitForSelector(selector, { timeout: 10000 });
+        await page.click(selector);
+        console.log(`✅ Found post button with: ${selector}`);
+        postButtonFound = true;
+        break;
+      } catch (e) {
+        console.log(`❌ Not found: ${selector}`);
+      }
+    }
 
-  const nextBtn = await page.$x("//div[contains(text(),'Next')]");
-  if (nextBtn[0]) await nextBtn[0].click();
-  await delay(3000);
+    if (!postButtonFound) {
+      throw new Error("Post button not found with any selector");
+    }
 
-  const captionInput = await page.$('textarea[aria-label="Write a caption"]');
-  if (captionInput) await captionInput.type(caption);
-  await delay(2000);
+    await delay(4000);
 
-  const shareBtn = await page.$x("//div[contains(text(),'Share')]");
-  if (shareBtn[0]) await shareBtn[0].click();
-  await delay(15000);
-  return true;
+    // Handle file upload
+    const fileInput = await page.$('input[type="file"]');
+    if (fileInput) {
+      await fileInput.uploadFile(videoPath);
+    } else {
+      console.log("❌ File input not found, using keyboard shortcut");
+      const [fileChooser] = await Promise.all([
+        page.waitForFileChooser({ timeout: 10000 }),
+        page.keyboard.press('Enter')
+      ]);
+      await fileChooser.accept([videoPath]);
+    }
+    await delay(8000);
+
+    // Next steps
+    const nextSelectors = [
+      'div[role="button"]:has(div:text("Next")),',
+      'button:has(div:text("Next")),',
+      'div[aria-label="Next"],',
+      '._ac7b._ac7d:has(div:text("Next"))'
+    ].join('');
+
+    await page.waitForSelector(nextSelectors, { timeout: 15000 });
+    await page.click(nextSelectors);
+    await delay(3000);
+
+    await page.waitForSelector(nextSelectors, { timeout: 10000 });
+    await page.click(nextSelectors);
+    await delay(3000);
+
+    // Caption input
+    const captionSelectors = [
+      'textarea[aria-label="Write a caption"]',
+      'div[aria-label="Write a caption"]',
+      'div[contenteditable="true"]'
+    ].join(',');
+
+    await page.waitForSelector(captionSelectors, { timeout: 15000 });
+    await page.type(captionSelectors, caption, { delay: 50 });
+    await delay(2000);
+
+    // Share button
+    const shareSelectors = [
+      'div[role="button"]:has(div:text("Share")),',
+      'button:has(div:text("Share")),',
+      'div[aria-label="Share"],',
+      '._ac7b._ac7d:has(div:text("Share"))'
+    ].join('');
+
+    const shareButton = await page.$(shareSelectors);
+    if (shareButton) {
+      await shareButton.click();
+      console.log("\u2705 Reel shared!");
+      
+      // Wait for confirmation
+      await page.waitForSelector('svg[aria-label="Your post has been shared"]', { timeout: 60000 })
+        .catch(() => console.log("⚠️ Post confirmation not detected"));
+    } else {
+      console.log("❌ Share button not found. Using keyboard fallback");
+      await page.keyboard.press('Enter');
+    }
+    
+    await delay(15000);
+    return true;
+  } catch (err) {
+    console.error("\u274C Upload failed:", err.message);
+    return false;
+  }
 }
 
-(async () => {
-  const { browser, desktopPage, mobilePage } = await launchContexts();
-  const reelUrl = "https://www.instagram.com/reel/REEL_ID_HERE/";
-  const filePath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+async function main() {
+  const browser = await puppeteer.launch({ 
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--single-process",
+      "--no-zygote",
+      "--disable-gpu"
+    ]
+  });
+  
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'
+  );
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 3, isMobile: true });
 
-  try {
-    const downloaded = await downloadReel(desktopPage, reelUrl, filePath);
-    const watermarked = filePath.replace(".mp4", "_wm.mp4");
-    await addWatermark(downloaded, watermarked);
-    await uploadReel(mobilePage, watermarked, "🔥 New Reel #reels #bot");
-  } catch (err) {
-    console.error("❌ Error:", err.message);
-  } finally {
+  if (fs.existsSync("session.json")) {
+    const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
+    await page.setCookie(...cookies);
+    console.log("\uD83D\uDD01 Session loaded");
+  } else {
+    console.log("\u274C No session.json found");
     await browser.close();
+    return;
   }
-})();
+
+  // Session validation
+  await page.goto(INSTAGRAM_URL, { waitUntil: "networkidle2", timeout: 60000 });
+  try {
+    await page.waitForSelector('svg[aria-label="Home"]', { timeout: 10000 });
+    console.log("✅ Session valid");
+  } catch {
+    console.log("❌ Session invalid. Reloading...");
+    await page.reload();
+    await delay(5000);
+  }
+
+  while (true) {
+    let reelPath, watermarkedPath;
+    
+    try {
+      const usernames = await fetchUsernames();
+      const username = usernames[Math.floor(Math.random() * usernames.length)];
+      console.log("\uD83C\uDFAF Target:", username);
+
+      reelPath = await downloadReel(page, username);
+      if (!reelPath) {
+        console.log("\u26A0\uFE0F No reel downloaded. Skipping...");
+        await delay(30000);
+        continue;
+      }
+
+      watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
+      await addWatermark(reelPath, watermarkedPath);
+
+      const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
+      const uploadSuccess = await uploadReel(page, watermarkedPath, caption);
+
+      // Adjust wait time based on upload success
+      const waitTime = uploadSuccess 
+        ? 5 * 60 * 1000  // 5 minutes if successful
+        : 2 * 60 * 1000; // 2 minutes if failed
+      
+      console.log(`\u23F3 Waiting ${waitTime/60000} minutes...`);
+      await delay(waitTime);
+    } catch (err) {
+      console.error("\u274C Main loop error:", err);
+      console.log("\u23F3 Retrying in 3 minutes...");
+      await delay(180000);
+    } finally {
+      // Cleanup files
+      if (reelPath && fs.existsSync(reelPath)) fs.unlinkSync(reelPath);
+      if (watermarkedPath && fs.existsSync(watermarkedPath)) fs.unlinkSync(watermarkedPath);
+    }
+  }
+}
+
+main().catch(err => console.error("\u274C Fatal error:", err));
