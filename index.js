@@ -46,26 +46,28 @@ async function downloadReel(page, username) {
 
   if (!links.length) return null;
   const randomReel = links[Math.floor(Math.random() * links.length)];
+
+  const responses = [];
+  page.on("response", (response) => {
+    const ct = response.headers()["content-type"] || "";
+    if (ct.startsWith("video/")) {
+      responses.push(response);
+    }
+  });
+
   await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
-  await delay(5000);
+  await delay(8000);
 
-  const videoUrl = await page.$eval("video", (v) => v.src);
+  const videoResponse = responses.find(r => r.url().includes(".mp4"));
+  if (!videoResponse) {
+    console.log("❌ No video response found");
+    return null;
+  }
+
+  const buffer = await videoResponse.buffer();
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
-  const writer = fs.createWriteStream(outPath);
-
-  const response = await axios({
-    url: videoUrl,
-    method: 'GET',
-    responseType: 'stream',
-    timeout: 60000
-  });
-
-  response.data.pipe(writer);
-
-  return new Promise((resolve) => {
-    writer.on("finish", () => resolve(outPath));
-    writer.on("error", () => resolve(null));
-  });
+  fs.writeFileSync(outPath, buffer);
+  return outPath;
 }
 
 function addWatermark(inputPath, outputPath) {
