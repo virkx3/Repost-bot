@@ -39,42 +39,44 @@ const cheerio = require("cheerio");
 
 async function downloadReel(page, username) {
   const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
-  await page.goto(profileUrl, { waitUntil: "networkidle2" });
-  await delay(4000);
+  await page.goto(profileUrl, { waitUntil: "domcontentloaded" });
+  await delay(3000);
 
   const links = await page.$$eval("a", (as) =>
     as.map((a) => a.href).filter((href) => href.includes("/reel/"))
   );
 
-  if (!links.length) return null;
-
-  const randomReel = links[Math.floor(Math.random() * links.length)];
-  console.log(`🎯 Visiting: ${randomReel}`);
-  await page.goto(randomReel, { waitUntil: "networkidle2" });
-  await delay(4000);
-
-  const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
-
-  // Evaluate and fetch video from inside page context
-  const success = await page.evaluate(async (outPath) => {
-    const video = document.querySelector("video");
-    if (!video || !video.src || video.src.startsWith("blob:")) return false;
-
-    const res = await fetch(video.src);
-    const buffer = await res.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-
-    // Communicate to Node.js to save base64 to file (via exposed function)
-    window.saveVideo(base64, outPath);
-    return true;
-  }, outPath);
-
-  if (!success) {
-    console.log("❌ No direct video URL found.\n⚠️ Skipping invalid reel...");
+  if (!links.length) {
+    console.log("⚠️ No reels found for user:", username);
     return null;
   }
 
-  return outPath;
+  const reelUrl = links[Math.floor(Math.random() * links.length)];
+  console.log("🎯 Visiting:", reelUrl);
+  await page.goto(reelUrl, { waitUntil: "networkidle2" });
+  await delay(3000);
+
+  // ✅ Extract .mp4 URL using internal page script
+  const videoUrl = await page.evaluate(() => {
+    const video = document.querySelector("video");
+    return video ? video.src : null;
+  });
+
+  if (!videoUrl || !videoUrl.includes(".mp4")) {
+    console.log("❌ No direct video URL found.");
+    return null;
+  }
+
+  const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+  const writer = fs.createWriteStream(outPath);
+
+  const response = await axios.get(videoUrl, { responseType: "stream" });
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on("finish", () => resolve(outPath));
+    writer.on("error", reject);
+  });
 }
 
 async function uploadReel(page, videoPath, caption) {
