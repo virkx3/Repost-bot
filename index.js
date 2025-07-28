@@ -4,9 +4,12 @@ const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
+const stream = require("stream");
+const util = require("util");
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
+const pipeline = util.promisify(stream.pipeline);
 
 const INSTAGRAM_URL = "https://www.instagram.com";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
@@ -49,23 +52,33 @@ async function downloadReel(page, username) {
   await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
   await delay(5000);
 
+  // Handle blob URLs
   const videoUrl = await page.$eval("video", (v) => v.src);
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
-  const writer = fs.createWriteStream(outPath);
 
-  const response = await axios({
-    url: videoUrl,
-    method: 'GET',
-    responseType: 'stream',
-    timeout: 60000
-  });
+  if (videoUrl.startsWith('blob:')) {
+    console.log("📦 Handling blob URL video");
+    const buffer = await page.evaluate(async (url) => {
+      const response = await fetch(url);
+      return response.arrayBuffer();
+    }, videoUrl);
 
-  response.data.pipe(writer);
-
-  return new Promise((resolve) => {
-    writer.on("finish", () => resolve(outPath));
-    writer.on("error", () => resolve(null));
-  });
+    const videoBuffer = Buffer.from(buffer);
+    fs.writeFileSync(outPath, videoBuffer);
+    return outPath;
+  } else {
+    console.log("🌐 Handling direct URL video");
+    const writer = fs.createWriteStream(outPath);
+    const response = await axios({
+      url: videoUrl,
+      method: 'GET',
+      responseType: 'stream',
+      timeout: 60000
+    });
+    
+    await pipeline(response.data, writer);
+    return outPath;
+  }
 }
 
 function addWatermark(inputPath, outputPath) {
@@ -112,15 +125,21 @@ async function uploadReel(page, videoPath, caption) {
       'button:has(> svg[aria-label="New post"])'
     ];
 
+    let postButtonFound = false;
     for (const selector of newPostSelectors) {
       try {
         await page.waitForSelector(selector, { timeout: 10000 });
         await page.click(selector);
         console.log(`✅ Found post button with: ${selector}`);
+        postButtonFound = true;
         break;
       } catch (e) {
         console.log(`❌ Not found: ${selector}`);
       }
+    }
+
+    if (!postButtonFound) {
+      throw new Error("Post button not found with any selector");
     }
 
     await delay(4000);
@@ -237,26 +256,25 @@ async function main() {
   }
 
   while (true) {
+    let reelPath, watermarkedPath;
+    
     try {
       const usernames = await fetchUsernames();
       const username = usernames[Math.floor(Math.random() * usernames.length)];
       console.log("\uD83C\uDFAF Target:", username);
 
-      const reelPath = await downloadReel(page, username);
+      reelPath = await downloadReel(page, username);
       if (!reelPath) {
         console.log("\u26A0\uFE0F No reel downloaded. Skipping...");
         await delay(30000);
         continue;
       }
 
-      const watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
+      watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
       await addWatermark(reelPath, watermarkedPath);
 
       const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
       const uploadSuccess = await uploadReel(page, watermarkedPath, caption);
-
-      if (fs.existsSync(reelPath)) fs.unlinkSync(reelPath);
-      if (fs.existsSync(watermarkedPath)) fs.unlinkSync(watermarkedPath);
 
       // Adjust wait time based on upload success
       const waitTime = uploadSuccess 
@@ -269,6 +287,10 @@ async function main() {
       console.error("\u274C Main loop error:", err);
       console.log("\u23F3 Retrying in 3 minutes...");
       await delay(180000);
+    } finally {
+      // Cleanup files
+      if (reelPath && fs.existsSync(reelPath)) fs.unlinkSync(reelPath);
+      if (watermarkedPath && fs.existsSync(watermarkedPath)) fs.unlinkSync(watermarkedPath);
     }
   }
 }
