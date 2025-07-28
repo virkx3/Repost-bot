@@ -37,8 +37,8 @@ async function fetchUsernames() {
 
 async function downloadReel(page, username) {
   const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
-  await page.goto(profileUrl, { waitUntil: "networkidle2", timeout: 30000 });
-  await delay(5000);
+  await page.goto(profileUrl, { waitUntil: "domcontentloaded" });
+  await delay(3000);
 
   const links = await page.$$eval("a", (as) =>
     as.map((a) => a.href).filter((href) => href.includes("/reel/"))
@@ -46,10 +46,12 @@ async function downloadReel(page, username) {
 
   if (!links.length) return null;
   const randomReel = links[Math.floor(Math.random() * links.length)];
-  await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
-  await delay(5000);
+  await page.goto(randomReel, { waitUntil: "domcontentloaded" });
+  await delay(3000);
 
   const videoUrl = await page.$eval("video", (v) => v.src);
+
+  // ❌ Blob URLs are not usable
   if (!videoUrl || videoUrl.startsWith("blob:")) {
     console.log("❌ Invalid or blob URL");
     return null;
@@ -58,27 +60,26 @@ async function downloadReel(page, username) {
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
   const writer = fs.createWriteStream(outPath);
 
-  const response = await axios({
-    url: videoUrl,
-    method: 'GET',
-    responseType: 'stream',
-    timeout: 60000
-  });
+  try {
+    const response = await axios.get(videoUrl, { responseType: "stream", timeout: 60000 });
+    response.data.pipe(writer);
 
-  response.data.pipe(writer);
-
-  return new Promise((resolve) => {
-    writer.on("finish", () => {
-      const stats = fs.statSync(outPath);
-      if (stats.size < 100 * 1024) { // less than 100KB = invalid
-        fs.unlinkSync(outPath);
-        resolve(null);
-      } else {
-        resolve(outPath);
-      }
+    return new Promise((resolve) => {
+      writer.on("finish", () => {
+        const stats = fs.statSync(outPath);
+        if (stats.size < 100 * 1024) { // ignore corrupt/small files
+          fs.unlinkSync(outPath);
+          resolve(null);
+        } else {
+          resolve(outPath);
+        }
+      });
+      writer.on("error", () => resolve(null));
     });
-    writer.on("error", () => resolve(null));
-  });
+  } catch (err) {
+    console.log("❌ Download error:", err.message);
+    return null;
+  }
 }
 
 function addWatermark(inputPath, outputPath) {
