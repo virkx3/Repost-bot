@@ -1,17 +1,13 @@
-# Use the official Node.js image with the same version you're using locally
-FROM node:18.18.2-slim
+# Use the official Node.js image with Debian Bullseye
+FROM node:18.18.2-bullseye
 
-# Install required system dependencies for Puppeteer and FFmpeg
+# Install required system dependencies
 RUN apt-get update && \
     apt-get install -y \
-    wget \
-    gnupg \
-    git \
-    ca-certificates \
-    fonts-liberation \
+    gconf-service \
     libasound2 \
-    libatk-bridge2.0-0 \
     libatk1.0-0 \
+    libatk-bridge2.0-0 \
     libc6 \
     libcairo2 \
     libcups2 \
@@ -20,10 +16,11 @@ RUN apt-get update && \
     libfontconfig1 \
     libgbm1 \
     libgcc1 \
+    libgconf-2-4 \
+    libgdk-pixbuf2.0-0 \
     libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
-    libnss3 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libstdc++6 \
@@ -40,11 +37,18 @@ RUN apt-get update && \
     libxrender1 \
     libxss1 \
     libxtst6 \
+    ca-certificates \
+    fonts-liberation \
+    libappindicator1 \
+    libnss3 \
     lsb-release \
     xdg-utils \
+    wget \
     ffmpeg \
-    xvfb \
-    && rm -rf /var/lib/apt/lists/*
+    xvfb
+
+# Install latest Chromium package (matches Puppeteer's expected version)
+RUN apt-get install -y chromium
 
 # Set working directory
 WORKDIR /app
