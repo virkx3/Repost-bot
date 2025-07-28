@@ -7,7 +7,7 @@ const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
-// Setup Puppeteer with stealth (no proxy)
+// Setup Puppeteer with stealth
 puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -15,6 +15,7 @@ const INSTAGRAM_URL = "https://www.instagram.com";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
 const WATERMARK = "ig/ramn_preet05";
 const VIDEO_DIR = "downloads";
+const RAPIDAPI_KEY = "615101c636mshb41ac7010c60732p1162e0jsn975c9cb4ec11";
 
 if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
 
@@ -38,49 +39,51 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-async function getVideoUrl(page) {
+async function getVideoUrlFromApi(reelUrl) {
   try {
-    const videoUrl = await page.evaluate(() => {
-      const metaVideo = document.querySelector('meta[property="og:video"]');
-      if (metaVideo) return metaVideo.content;
-      
-      const video = document.querySelector('video');
-      if (video) return video.src;
-      
-      const scripts = Array.from(document.querySelectorAll('script'));
-      for (const script of scripts) {
-        if (script.textContent.includes('video_url')) {
-          const match = script.textContent.match(/"video_url":"(https?:\/\/[^"]+\.mp4[^"]*)"/);
-          if (match) return match[1];
-        }
-      }
-      return null;
-    });
+    const options = {
+      method: 'GET',
+      url: 'https://instagram-reels-downloader2.p.rapidapi.com/.netlify/functions/api/getLink',
+      params: { url: reelUrl },
+      headers: {
+        'X-RapidAPI-Key': RAPIDAPI_KEY,
+        'X-RapidAPI-Host': 'instagram-reels-downloader2.p.rapidapi.com'
+      },
+      timeout: 10000
+    };
+
+    const response = await axios.request(options);
     
-    return videoUrl;
+    if (response.data && response.data.videoUrl) {
+      return response.data.videoUrl;
+    }
+    
+    return null;
   } catch (err) {
-    console.error("Failed to extract video URL:", err);
+    console.error("API Error:", err.response?.data || err.message);
     return null;
   }
 }
 
 async function downloadVideo(url) {
-  if (!url || url.startsWith('blob:')) {
-    console.log("Skipping blob URL");
-    return null;
-  }
+  if (!url) return null;
 
   try {
     const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
     const response = await axios({
       url,
       method: 'GET',
-      responseType: 'arraybuffer',
+      responseType: 'stream',
       timeout: 60000
     });
+
+    const writer = fs.createWriteStream(outPath);
+    response.data.pipe(writer);
     
-    fs.writeFileSync(outPath, response.data);
-    return outPath;
+    return new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(outPath));
+      writer.on('error', reject);
+    });
   } catch (err) {
     console.error("Download failed:", err.message);
     return null;
@@ -189,7 +192,7 @@ async function uploadReel(page, videoPath, caption) {
 
 async function main() {
   const browser = await puppeteer.launch({ 
-    headless: "new", // Set to true for production
+    headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -251,17 +254,17 @@ async function main() {
       }
 
       const randomReel = links[Math.floor(Math.random() * links.length)];
-      await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
-      await delay(5000);
+      console.log("Reel URL:", randomReel);
 
-      const videoUrl = await getVideoUrl(page);
+      // Get video URL via API
+      const videoUrl = await getVideoUrlFromApi(randomReel);
       if (!videoUrl) {
-        console.log("No video URL found");
+        console.log("No video URL found from API");
         await delay(30000);
         continue;
       }
 
-      console.log("Downloading video from:", videoUrl);
+      console.log("Downloading video from API URL:", videoUrl);
       reelPath = await downloadVideo(videoUrl);
       if (!reelPath) {
         console.log("Download failed");
