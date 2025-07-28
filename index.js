@@ -46,20 +46,50 @@ async function downloadReel(page, username) {
 
   if (!links.length) return null;
   const randomReel = links[Math.floor(Math.random() * links.length)];
-  await page.goto(randomReel, { waitUntil: "domcontentloaded" });
-  await delay(3000);
+  console.log("🎯 Visiting:", randomReel);
 
-  const videoUrl = await page.$eval("video", (v) => v.src);
+  let videoUrl = null;
+
+  // Intercept video URL from network response
+  page.on("response", async (response) => {
+    const reqUrl = response.url();
+    if (reqUrl.includes(".mp4") && reqUrl.includes("reel")) {
+      videoUrl = reqUrl;
+    }
+  });
+
+  await page.goto(randomReel, { waitUntil: "networkidle2" });
+  await delay(5000);
+
+  if (!videoUrl) {
+    console.log("❌ No direct video URL found.");
+    return null;
+  }
+
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
   const writer = fs.createWriteStream(outPath);
 
-  const response = await axios.get(videoUrl, { responseType: "stream" });
-  response.data.pipe(writer);
+  try {
+    const response = await axios.get(videoUrl, { responseType: "stream", timeout: 60000 });
+    response.data.pipe(writer);
 
-  return new Promise((resolve) => {
-    writer.on("finish", () => resolve(outPath));
-    writer.on("error", () => resolve(null));
-  });
+    return new Promise((resolve) => {
+      writer.on("finish", () => {
+        const stats = fs.statSync(outPath);
+        if (stats.size < 100 * 1024) {
+          fs.unlinkSync(outPath);
+          resolve(null);
+        } else {
+          console.log("✅ Reel downloaded:", outPath);
+          resolve(outPath);
+        }
+      });
+      writer.on("error", () => resolve(null));
+    });
+  } catch (err) {
+    console.log("❌ Download error:", err.message);
+    return null;
+  }
 }
 
 function addWatermark(inputPath, outputPath) {
