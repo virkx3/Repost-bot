@@ -37,34 +37,45 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-async function downloadFromIqsaved(page, reelUrl) {
+async function downloadFromIQSaved(page, reelUrl) {
   try {
-    await page.goto("https://iqsaved.com/reel/", { waitUntil: "networkidle2", timeout: 60000 });
-    await delay(4000);
-    await page.type("#url-box", reelUrl);
-    await delay(1000);
-    await page.click('button[type="submit"]');
-    await delay(10000);
+    console.log("🌐 Navigating to IQSaved...");
+    await page.goto("https://iqsaved.com/reel/", { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    await page.evaluate(() => window.scrollBy(0, 500));
+    await page.waitForSelector('input[placeholder="Insert Instagram link here"]', { timeout: 15000 });
+    await page.type('input[placeholder="Insert Instagram link here"]', reelUrl);
+    await delay(500);
+
+    console.log("🔘 Clicking Download...");
+    await page.click('button:has-text("Download")');
+    await delay(10000); // Wait for server to process
+
+    console.log("📜 Scrolling to download section...");
+    await page.evaluate(() => window.scrollBy(0, 800));
     await delay(3000);
 
-    const videoUrl = await page.$eval('a[href$=".mp4"]', el => el.href);
-    if (!videoUrl) return null;
+    console.log("🔗 Searching for download video link...");
+    const videoUrl = await page.$$eval('a', as =>
+      as.map(a => a.href).find(href => href.endsWith(".mp4"))
+    );
+
+    if (!videoUrl) throw new Error("❌ No .mp4 link found.");
+
+    console.log("🎥 Found download link:", videoUrl);
+
+    const videoData = await axios.get(videoUrl, {
+      responseType: "arraybuffer",
+      timeout: 60000
+    });
 
     const fileName = `reel_${Date.now()}.mp4`;
-    const filePath = path.join(VIDEO_DIR, fileName);
-    const response = await axios.get(videoUrl, { responseType: "stream" });
+    const filePath = path.join("downloads", fileName);
+    fs.writeFileSync(filePath, videoData.data);
+    console.log("✅ Video downloaded to:", filePath);
 
-    const writer = fs.createWriteStream(filePath);
-    response.data.pipe(writer);
-
-    return new Promise((resolve, reject) => {
-      writer.on("finish", () => resolve(filePath));
-      writer.on("error", reject);
-    });
+    return filePath;
   } catch (err) {
-    console.error("Download error:", err.message);
+    console.error("🚫 IQSaved download failed:", err.message);
     return null;
   }
 }
