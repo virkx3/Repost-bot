@@ -127,22 +127,28 @@ async function uploadReel(page, videoPath, caption) {
 
 async function main() {
   const iPhone = puppeteer.devices["iPhone X"];
-const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-const page = await browser.newPage();
-await page.emulate(iPhone);
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15A372 Safari/604.1'
-  );
-  await page.setViewport({ width: 375, height: 812, isMobile: true });
 
+  const browser = await puppeteer.launch({
+    headless: "new", // Set to false for debugging; use "new" if preferred
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
+
+  const page = await browser.newPage();
+  await page.emulate(iPhone); // Emulate iPhone device
+
+  // Load saved Instagram session cookies
   if (fs.existsSync("session.json")) {
     const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
     await page.setCookie(...cookies);
-    console.log("\uD83D\uDD01 Session loaded");
+    console.log("🔁 Session loaded");
   } else {
-    console.log("\u274C No session.json found. Please login manually first.");
+    console.log("❌ No session.json found. Please login manually first.");
     await browser.close();
     return;
   }
+
+  // Continue your script logic here (fetching reels, downloading, uploading, etc.)
+}
 
   while (true) {
     try {
