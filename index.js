@@ -4,12 +4,9 @@ const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
-const stream = require("stream");
-const util = require("util");
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
-const pipeline = util.promisify(stream.pipeline);
 
 const INSTAGRAM_URL = "https://www.instagram.com";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
@@ -52,32 +49,54 @@ async function downloadReel(page, username) {
   await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
   await delay(5000);
 
-  // Handle blob URLs
-  const videoUrl = await page.$eval("video", (v) => v.src);
+  // Handle all video types with Puppeteer's native method
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+  
+  try {
+    // Wait for video to be ready
+    await page.waitForSelector('video', { timeout: 15000 });
+    await page.waitForFunction(() => {
+      const video = document.querySelector('video');
+      return video && video.readyState >= 4; // HAVE_ENOUGH_DATA
+    }, { timeout: 30000 });
 
-  if (videoUrl.startsWith('blob:')) {
-    console.log("📦 Handling blob URL video");
-    const buffer = await page.evaluate(async (url) => {
-      const response = await fetch(url);
-      return response.arrayBuffer();
-    }, videoUrl);
-
-    const videoBuffer = Buffer.from(buffer);
-    fs.writeFileSync(outPath, videoBuffer);
-    return outPath;
-  } else {
-    console.log("🌐 Handling direct URL video");
-    const writer = fs.createWriteStream(outPath);
-    const response = await axios({
-      url: videoUrl,
-      method: 'GET',
-      responseType: 'stream',
-      timeout: 60000
-    });
+    // Get video element handle
+    const videoElement = await page.$('video');
     
-    await pipeline(response.data, writer);
+    // Get video source
+    const videoUrl = await page.evaluate(video => video.src, videoElement);
+    
+    if (videoUrl.startsWith('blob:')) {
+      console.log("📦 Handling blob URL video with Puppeteer method");
+      // Use Puppeteer's built-in method to save media
+      const videoData = await videoElement.evaluate(video => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          fetch(video.src)
+            .then(res => res.blob())
+            .then(blob => {
+              reader.readAsArrayBuffer(blob);
+              reader.onloadend = () => resolve(Array.from(new Uint8Array(reader.result)));
+            });
+        });
+      });
+
+      fs.writeFileSync(outPath, Buffer.from(videoData));
+    } else {
+      console.log("🌐 Handling direct URL video");
+      const response = await axios({
+        url: videoUrl,
+        method: 'GET',
+        responseType: 'arraybuffer',
+        timeout: 60000
+      });
+      fs.writeFileSync(outPath, response.data);
+    }
+    
     return outPath;
+  } catch (err) {
+    console.error("❌ Video download failed:", err.message);
+    return null;
   }
 }
 
@@ -144,7 +163,7 @@ async function uploadReel(page, videoPath, caption) {
 
     await delay(4000);
 
-    // Handle file upload with multiple selectors
+    // Handle file upload
     const fileInput = await page.$('input[type="file"]');
     if (fileInput) {
       await fileInput.uploadFile(videoPath);
@@ -158,7 +177,7 @@ async function uploadReel(page, videoPath, caption) {
     }
     await delay(8000);
 
-    // Next steps with enhanced selectors
+    // Next steps
     const nextSelectors = [
       'div[role="button"]:has(div:text("Next")),',
       'button:has(div:text("Next")),',
@@ -174,7 +193,7 @@ async function uploadReel(page, videoPath, caption) {
     await page.click(nextSelectors);
     await delay(3000);
 
-    // Caption input with multiple selector options
+    // Caption input
     const captionSelectors = [
       'textarea[aria-label="Write a caption"]',
       'div[aria-label="Write a caption"]',
@@ -185,7 +204,7 @@ async function uploadReel(page, videoPath, caption) {
     await page.type(captionSelectors, caption, { delay: 50 });
     await delay(2000);
 
-    // Share button with multiple options
+    // Share button
     const shareSelectors = [
       'div[role="button"]:has(div:text("Share")),',
       'button:has(div:text("Share")),',
