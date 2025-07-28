@@ -37,7 +37,7 @@ async function setupBrowser(proxy) {
     `--proxy-server=${proxyUrl}`
   ];
 
-  const browser = await puppeteer.launch({ headless: true, args });
+  const browser = await puppeteer.launch({ headless: "new", args });
   const context = await browser.createIncognitoBrowserContext();
   const page = await context.newPage();
 
