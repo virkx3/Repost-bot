@@ -1,4 +1,5 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fs = require("fs");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
@@ -6,6 +7,18 @@ const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
+// Configure proxy
+const proxyConfig = {
+  type: "http",
+  ip: "isp.decodo.com",
+  port: "10001",
+  username: "spg1c4utf1",
+  password: "9VUm5exYtkh~iS8h6y"
+};
+const proxyUrl = `${proxyConfig.type}://${proxyConfig.username}:${proxyConfig.password}@${proxyConfig.ip}:${proxyConfig.port}`;
+
+// Setup Puppeteer with stealth and proxy
+puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const INSTAGRAM_URL = "https://www.instagram.com";
@@ -35,75 +48,55 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-async function getDirectVideoUrl(page) {
+async function getVideoUrl(page) {
   try {
-    // Method 1: Get from meta tags
-    const metaVideo = await page.$eval('meta[property="og:video"]', el => el.content);
-    if (metaVideo && !metaVideo.startsWith('blob:')) return metaVideo;
-
-    // Method 2: Extract from JSON in script tags
-    const scriptData = await page.$$eval('script[type="application/ld+json"]', scripts => {
+    // Multiple methods to extract video URL
+    const videoUrl = await page.evaluate(() => {
+      // Method 1: Meta tag
+      const metaVideo = document.querySelector('meta[property="og:video"]');
+      if (metaVideo) return metaVideo.content;
+      
+      // Method 2: Video element
+      const video = document.querySelector('video');
+      if (video) return video.src;
+      
+      // Method 3: Script tags
+      const scripts = Array.from(document.querySelectorAll('script'));
       for (const script of scripts) {
-        try {
-          const data = JSON.parse(script.text);
-          if (data?.video?.contentUrl) return data.video.contentUrl;
-        } catch {}
+        if (script.textContent.includes('video_url')) {
+          const match = script.textContent.match(/"video_url":"(https?:\/\/[^"]+\.mp4[^"]*)"/);
+          if (match) return match[1];
+        }
       }
       return null;
     });
-    if (scriptData) return scriptData;
-
-    // Method 3: Find the highest quality video source
-    const sources = await page.$$eval('video source', sources => 
-      sources.map(s => s.src).filter(src => src && !src.startsWith('blob:'))
-    );
-    if (sources.length) return sources[0];
     
-    return null;
-  } catch {
+    return videoUrl;
+  } catch (err) {
+    console.error("Failed to extract video URL:", err);
     return null;
   }
 }
 
-async function downloadReel(page, username) {
+async function downloadVideo(url) {
+  if (!url || url.startsWith('blob:')) {
+    console.log("Skipping blob URL");
+    return null;
+  }
+
   try {
-    const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
-    await page.goto(profileUrl, { waitUntil: "networkidle2", timeout: 30000 });
-    await delay(5000);
-
-    const links = await page.$$eval("a", as =>
-      as.map(a => a.href).filter(href => href.includes("/reel/"))
-    );
-
-    if (!links.length) return null;
-    const randomReel = links[Math.floor(Math.random() * links.length)];
-    await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
-    await delay(5000);
-
-    // Get direct video URL
-    const videoUrl = await getDirectVideoUrl(page);
-    if (!videoUrl) {
-      console.log("❌ Failed to find direct video URL");
-      return null;
-    }
-
     const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
     const response = await axios({
-      url: videoUrl,
+      url,
       method: 'GET',
-      responseType: 'stream',
+      responseType: 'arraybuffer',
       timeout: 60000
     });
-
-    const writer = fs.createWriteStream(outPath);
-    response.data.pipe(writer);
     
-    return new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(outPath));
-      writer.on('error', reject);
-    });
+    fs.writeFileSync(outPath, response.data);
+    return outPath;
   } catch (err) {
-    console.error("❌ Download failed:", err.message);
+    console.error("Download failed:", err.message);
     return null;
   }
 }
@@ -136,100 +129,76 @@ async function uploadReel(page, videoPath, caption) {
   console.log("\u23EB Uploading reel:", videoPath);
   
   try {
-    // Reload homepage to ensure clean state
-    await page.goto("https://www.instagram.com/", { 
+    // Navigate to Instagram homepage
+    await page.goto(INSTAGRAM_URL, { 
       waitUntil: "networkidle2", 
       timeout: 60000 
     });
-    await delay(7000);
+    await delay(5000);
 
-    // Improved new post button detection
-    const newPostSelectors = [
-      '[aria-label="New post"]',
-      '[aria-label="Create new post"]',
-      'div[role="button"]:has(> div > svg[aria-label="New post"])',
-      'svg[aria-label="New post"]',
-      'button:has(> svg[aria-label="New post"])'
-    ];
-
-    let postButtonFound = false;
-    for (const selector of newPostSelectors) {
-      try {
-        await page.waitForSelector(selector, { timeout: 10000 });
-        await page.click(selector);
-        console.log(`✅ Found post button with: ${selector}`);
-        postButtonFound = true;
-        break;
-      } catch (e) {
-        console.log(`❌ Not found: ${selector}`);
-      }
-    }
-
-    if (!postButtonFound) {
-      throw new Error("Post button not found with any selector");
-    }
-
-    await delay(4000);
+    // Click Create button using precise selector
+    const createButton = await page.waitForSelector(
+      'span:has-text("Create")', 
+      { timeout: 10000 }
+    );
+    await createButton.click();
+    await delay(3000);
 
     // Handle file upload
     const fileInput = await page.$('input[type="file"]');
     if (fileInput) {
       await fileInput.uploadFile(videoPath);
     } else {
-      console.log("❌ File input not found, using keyboard shortcut");
+      console.log("Using keyboard fallback for file input");
       const [fileChooser] = await Promise.all([
         page.waitForFileChooser({ timeout: 10000 }),
         page.keyboard.press('Enter')
       ]);
       await fileChooser.accept([videoPath]);
     }
-    await delay(8000);
-
-    // Next steps
-    const nextSelectors = [
-      'div[role="button"]:has(div:text("Next")),',
-      'button:has(div:text("Next")),',
-      'div[aria-label="Next"],',
-      '._ac7b._ac7d:has(div:text("Next"))'
-    ].join('');
-
-    await page.waitForSelector(nextSelectors, { timeout: 15000 });
-    await page.click(nextSelectors);
-    await delay(3000);
-
-    await page.waitForSelector(nextSelectors, { timeout: 10000 });
-    await page.click(nextSelectors);
-    await delay(3000);
-
-    // Caption input
-    const captionSelectors = [
-      'textarea[aria-label="Write a caption"]',
-      'div[aria-label="Write a caption"]',
-      'div[contenteditable="true"]'
-    ].join(',');
-
-    await page.waitForSelector(captionSelectors, { timeout: 15000 });
-    await page.type(captionSelectors, caption, { delay: 50 });
+    await delay(8000); // Increased delay for processing
+    
+    // Click Original button
+    const originalButton = await page.waitForSelector(
+      'div:has-text("Original")', 
+      { timeout: 10000 }
+    );
+    await originalButton.click();
     await delay(2000);
-
-    // Share button
-    const shareSelectors = [
-      'div[role="button"]:has(div:text("Share")),',
-      'button:has(div:text("Share")),',
-      'div[aria-label="Share"],',
-      '._ac7b._ac7d:has(div:text("Share"))'
-    ].join('');
-
-    const shareButton = await page.$(shareSelectors);
-    if (shareButton) {
-      await shareButton.click();
+    
+    // First Next button
+    const nextButtons = await page.$$('div:has-text("Next")');
+    if (nextButtons.length > 0) {
+      await nextButtons[0].click();
+    }
+    await delay(3000);
+    
+    // Second Next button
+    const nextButtons2 = await page.$$('div:has-text("Next")');
+    if (nextButtons2.length > 0) {
+      await nextButtons2[0].click();
+    }
+    await delay(3000);
+    
+    // Add caption
+    const captionField = await page.waitForSelector(
+      'div[aria-label="Write a caption"]', 
+      { timeout: 10000 }
+    );
+    await captionField.type(caption, { delay: 50 });
+    await delay(2000);
+    
+    // Click Share button
+    const shareButtons = await page.$$('div:has-text("Share")');
+    if (shareButtons.length > 0) {
+      await shareButtons[0].click();
       console.log("\u2705 Reel shared!");
       
       // Wait for confirmation
       await page.waitForSelector('svg[aria-label="Your post has been shared"]', { timeout: 60000 })
         .catch(() => console.log("⚠️ Post confirmation not detected"));
     } else {
-      console.log("❌ Share button not found. Using keyboard fallback");
+      console.log("Using keyboard fallback for sharing");
       await page.keyboard.press('Enter');
     }
     
@@ -243,8 +212,9 @@ async function uploadReel(page, videoPath, caption) {
 
 async function main() {
   const browser = await puppeteer.launch({ 
-    headless: true,
+    headless: false, // Set to true for production
     args: [
+      `--proxy-server=${proxyUrl}`,
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
@@ -256,10 +226,16 @@ async function main() {
   });
   
   const page = await browser.newPage();
-  await page.setUserAgent(
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'
-  );
-  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 3, isMobile: true });
+  
+  // Set desktop user agent and viewport
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
+  await page.setViewport({ width: 1536, height: 730 });
+  
+  // Authenticate proxy
+  await page.authenticate({
+    username: proxyConfig.username,
+    password: proxyConfig.password
+  });
 
   if (fs.existsSync("session.json")) {
     const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
@@ -290,17 +266,53 @@ async function main() {
       const username = usernames[Math.floor(Math.random() * usernames.length)];
       console.log("\uD83C\uDFAF Target:", username);
 
-      reelPath = await downloadReel(page, username);
-      if (!reelPath) {
-        console.log("\u26A0\uFE0F No reel downloaded. Skipping...");
+      // Navigate to profile reels
+      const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
+      await page.goto(profileUrl, { waitUntil: "networkidle2", timeout: 30000 });
+      await delay(5000);
+
+      // Find reel links
+      const links = await page.$$eval("a", as =>
+        as.map(a => a.href).filter(href => href.includes("/reel/"))
+      );
+
+      if (!links.length) {
+        console.log("No reels found");
         await delay(30000);
         continue;
       }
 
+      // Visit a random reel
+      const randomReel = links[Math.floor(Math.random() * links.length)];
+      await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
+      await delay(5000);
+
+      // Get video URL
+      const videoUrl = await getVideoUrl(page);
+      if (!videoUrl) {
+        console.log("No video URL found");
+        await delay(30000);
+        continue;
+      }
+
+      console.log("Downloading video from:", videoUrl);
+      reelPath = await downloadVideo(videoUrl);
+      if (!reelPath) {
+        console.log("Download failed");
+        await delay(30000);
+        continue;
+      }
+
+      // Add watermark
       watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
       await addWatermark(reelPath, watermarkedPath);
+      console.log("Watermark added");
 
+      // Prepare caption
       const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
+      console.log("Generated caption");
+
+      // Upload reel
       const uploadSuccess = await uploadReel(page, watermarkedPath, caption);
 
       // Adjust wait time based on upload success
