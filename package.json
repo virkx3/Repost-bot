@@ -16,8 +16,5 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2"
     "puppeteer": "^22.8.2",
     "instagram-url-direct": "^2.0.4"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
