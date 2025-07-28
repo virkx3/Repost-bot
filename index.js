@@ -7,17 +7,7 @@ const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
-// Configure proxy
-const proxyConfig = {
-  type: "http",
-  ip: "isp.decodo.com",
-  port: "10001",
-  username: "spg1c4utf1",
-  password: "9VUm5exYtkh~iS8h6y"
-};
-const proxyUrl = `${proxyConfig.type}://${proxyConfig.username}:${proxyConfig.password}@${proxyConfig.ip}:${proxyConfig.port}`;
-
-// Setup Puppeteer with stealth and proxy
+// Setup Puppeteer with stealth (no proxy)
 puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -50,17 +40,13 @@ async function fetchUsernames() {
 
 async function getVideoUrl(page) {
   try {
-    // Multiple methods to extract video URL
     const videoUrl = await page.evaluate(() => {
-      // Method 1: Meta tag
       const metaVideo = document.querySelector('meta[property="og:video"]');
       if (metaVideo) return metaVideo.content;
       
-      // Method 2: Video element
       const video = document.querySelector('video');
       if (video) return video.src;
       
-      // Method 3: Script tags
       const scripts = Array.from(document.querySelectorAll('script'));
       for (const script of scripts) {
         if (script.textContent.includes('video_url')) {
@@ -129,14 +115,12 @@ async function uploadReel(page, videoPath, caption) {
   console.log("\u23EB Uploading reel:", videoPath);
   
   try {
-    // Navigate to Instagram homepage
     await page.goto(INSTAGRAM_URL, { 
       waitUntil: "networkidle2", 
       timeout: 60000 
     });
     await delay(5000);
 
-    // Click Create button using precise selector
     const createButton = await page.waitForSelector(
       'span:has-text("Create")', 
       { timeout: 10000 }
@@ -144,7 +128,6 @@ async function uploadReel(page, videoPath, caption) {
     await createButton.click();
     await delay(3000);
 
-    // Handle file upload
     const fileInput = await page.$('input[type="file"]');
     if (fileInput) {
       await fileInput.uploadFile(videoPath);
@@ -156,9 +139,8 @@ async function uploadReel(page, videoPath, caption) {
       ]);
       await fileChooser.accept([videoPath]);
     }
-    await delay(8000); // Increased delay for processing
+    await delay(8000);
     
-    // Click Original button
     const originalButton = await page.waitForSelector(
       'div:has-text("Original")', 
       { timeout: 10000 }
@@ -166,21 +148,18 @@ async function uploadReel(page, videoPath, caption) {
     await originalButton.click();
     await delay(2000);
     
-    // First Next button
     const nextButtons = await page.$$('div:has-text("Next")');
     if (nextButtons.length > 0) {
       await nextButtons[0].click();
     }
     await delay(3000);
     
-    // Second Next button
     const nextButtons2 = await page.$$('div:has-text("Next")');
     if (nextButtons2.length > 0) {
       await nextButtons2[0].click();
     }
     await delay(3000);
     
-    // Add caption
     const captionField = await page.waitForSelector(
       'div[aria-label="Write a caption"]', 
       { timeout: 10000 }
@@ -188,13 +167,11 @@ async function uploadReel(page, videoPath, caption) {
     await captionField.type(caption, { delay: 50 });
     await delay(2000);
     
-    // Click Share button
     const shareButtons = await page.$$('div:has-text("Share")');
     if (shareButtons.length > 0) {
       await shareButtons[0].click();
       console.log("\u2705 Reel shared!");
       
-      // Wait for confirmation
       await page.waitForSelector('svg[aria-label="Your post has been shared"]', { timeout: 60000 })
         .catch(() => console.log("⚠️ Post confirmation not detected"));
     } else {
@@ -214,7 +191,6 @@ async function main() {
   const browser = await puppeteer.launch({ 
     headless: "new", // Set to true for production
     args: [
-      `--proxy-server=${proxyUrl}`,
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
@@ -230,12 +206,6 @@ async function main() {
   // Set desktop user agent and viewport
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
   await page.setViewport({ width: 1536, height: 730 });
-  
-  // Authenticate proxy
-  await page.authenticate({
-    username: proxyConfig.username,
-    password: proxyConfig.password
-  });
 
   if (fs.existsSync("session.json")) {
     const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
@@ -266,12 +236,10 @@ async function main() {
       const username = usernames[Math.floor(Math.random() * usernames.length)];
       console.log("\uD83C\uDFAF Target:", username);
 
-      // Navigate to profile reels
       const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
       await page.goto(profileUrl, { waitUntil: "networkidle2", timeout: 30000 });
       await delay(5000);
 
-      // Find reel links
       const links = await page.$$eval("a", as =>
         as.map(a => a.href).filter(href => href.includes("/reel/"))
       );
@@ -282,12 +250,10 @@ async function main() {
         continue;
       }
 
-      // Visit a random reel
       const randomReel = links[Math.floor(Math.random() * links.length)];
       await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
       await delay(5000);
 
-      // Get video URL
       const videoUrl = await getVideoUrl(page);
       if (!videoUrl) {
         console.log("No video URL found");
@@ -303,22 +269,18 @@ async function main() {
         continue;
       }
 
-      // Add watermark
       watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
       await addWatermark(reelPath, watermarkedPath);
       console.log("Watermark added");
 
-      // Prepare caption
       const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
       console.log("Generated caption");
 
-      // Upload reel
       const uploadSuccess = await uploadReel(page, watermarkedPath, caption);
 
-      // Adjust wait time based on upload success
       const waitTime = uploadSuccess 
-        ? 5 * 60 * 1000  // 5 minutes if successful
-        : 2 * 60 * 1000; // 2 minutes if failed
+        ? 5 * 60 * 1000
+        : 2 * 60 * 1000;
       
       console.log(`\u23F3 Waiting ${waitTime/60000} minutes...`);
       await delay(waitTime);
@@ -327,7 +289,6 @@ async function main() {
       console.log("\u23F3 Retrying in 3 minutes...");
       await delay(180000);
     } finally {
-      // Cleanup files
       if (reelPath && fs.existsSync(reelPath)) fs.unlinkSync(reelPath);
       if (watermarkedPath && fs.existsSync(watermarkedPath)) fs.unlinkSync(watermarkedPath);
     }
