@@ -4,7 +4,6 @@ const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
-const { execSync } = require("child_process");
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -13,10 +12,8 @@ const INSTAGRAM_URL = "https://www.instagram.com";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
 const WATERMARK = "ig/ramn_preet05";
 const VIDEO_DIR = "downloads";
-const SCREENSHOT_DIR = "screenshots";
 
 if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
-if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR);
 
 function getRandomCaption() {
   const captions = fs.readFileSync("caption.txt", "utf8").split("\n").filter(Boolean);
@@ -90,38 +87,59 @@ function addWatermark(inputPath, outputPath) {
 }
 
 async function uploadReel(page, videoPath, caption) {
-  console.log("⏫ Uploading reel: ", videoPath);
-  // Replace with actual upload logic
-  console.log("✅ Uploaded with caption:", caption);
-}
-
-async function saveAndPushScreenshot(page, filename = `error-${Date.now()}.png`) {
-  const filePath = path.join(SCREENSHOT_DIR, filename);
-  await page.screenshot({ path: filePath });
-
+  console.log("\u23EB Uploading reel:", videoPath);
   try {
-    execSync(`git config --global user.email \"you@example.com\"`);
-    execSync(`git config --global user.name \"auto-bot\"`);
-    execSync(`git add ${filePath}`);
-    execSync(`git commit -m \"Add screenshot ${filename}\"`);
-    execSync(`git push https://${process.env.GITHUB_TOKEN}@github.com/${process.env.REPO}.git main`);
-    console.log("📸 Screenshot pushed to GitHub.");
+    await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
+    await delay(5000);
+
+    await page.waitForSelector('[aria-label="New post"]', { timeout: 10000 });
+    await page.click('[aria-label="New post"]');
+    await delay(3000);
+
+    const fileInput = await page.$('input[type="file"]');
+    await fileInput.uploadFile(videoPath);
+    await delay(5000);
+
+    await page.waitForSelector('text/Next', { timeout: 10000 });
+    await page.click('text/Next');
+    await delay(2000);
+
+    await page.waitForSelector('text/Next', { timeout: 10000 });
+    await page.click('text/Next');
+    await delay(2000);
+
+    await page.waitForSelector('textarea', { timeout: 10000 });
+    await page.type('textarea', caption);
+    await delay(1000);
+
+    const shareButton = await page.$x("//button[contains(text(), 'Share')]");
+    if (shareButton.length) {
+      await shareButton[0].click();
+      console.log("\u2705 Reel shared!");
+    } else {
+      throw new Error("\u274C Share button not found.");
+    }
+    await delay(15000);
   } catch (err) {
-    console.error("❌ Failed to push screenshot:", err.message);
+    console.error("\u274C Upload failed:", err.message);
   }
 }
 
 async function main() {
   const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   const page = await browser.newPage();
-  await page.setUserAgent("Mozilla/5.0");
+
+  await page.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15A372 Safari/604.1'
+  );
+  await page.setViewport({ width: 375, height: 812, isMobile: true });
 
   if (fs.existsSync("session.json")) {
     const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
     await page.setCookie(...cookies);
-    console.log("🔁 Session loaded");
+    console.log("\uD83D\uDD01 Session loaded");
   } else {
-    console.log("❌ No session.json found. Please login manually first.");
+    console.log("\u274C No session.json found. Please login manually first.");
     await browser.close();
     return;
   }
@@ -130,11 +148,11 @@ async function main() {
     try {
       const usernames = await fetchUsernames();
       const username = usernames[Math.floor(Math.random() * usernames.length)];
-      console.log("🎯 Target:", username);
+      console.log("\uD83C\uDFAF Target:", username);
 
       const reelPath = await downloadReel(page, username);
       if (!reelPath) {
-        console.log("⚠️ No reel downloaded.");
+        console.log("\u26A0\uFE0F No reel downloaded.");
         await delay(30000);
         continue;
       }
@@ -148,11 +166,10 @@ async function main() {
       fs.unlinkSync(reelPath);
       fs.unlinkSync(watermarkedPath);
 
-      console.log("⏳ Waiting 5 minutes...");
+      console.log("\u23F3 Waiting 5 minutes...");
       await delay(5 * 60 * 1000);
     } catch (err) {
-      console.error("❌ Error:", err);
-      await saveAndPushScreenshot(page);
+      console.error("\u274C Error:", err);
       await delay(60000);
     }
   }
