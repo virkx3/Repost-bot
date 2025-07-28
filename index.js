@@ -50,36 +50,16 @@ async function downloadReel(page, username) {
   await delay(3000);
 
   const videoUrl = await page.$eval("video", (v) => v.src);
-
-  // ❌ Blob URLs are not usable
-  if (!videoUrl || videoUrl.startsWith("blob:")) {
-    console.log("❌ Invalid or blob URL");
-    return null;
-  }
-
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
   const writer = fs.createWriteStream(outPath);
 
-  try {
-    const response = await axios.get(videoUrl, { responseType: "stream", timeout: 60000 });
-    response.data.pipe(writer);
+  const response = await axios.get(videoUrl, { responseType: "stream" });
+  response.data.pipe(writer);
 
-    return new Promise((resolve) => {
-      writer.on("finish", () => {
-        const stats = fs.statSync(outPath);
-        if (stats.size < 100 * 1024) { // ignore corrupt/small files
-          fs.unlinkSync(outPath);
-          resolve(null);
-        } else {
-          resolve(outPath);
-        }
-      });
-      writer.on("error", () => resolve(null));
-    });
-  } catch (err) {
-    console.log("❌ Download error:", err.message);
-    return null;
-  }
+  return new Promise((resolve) => {
+    writer.on("finish", () => resolve(outPath));
+    writer.on("error", () => resolve(null));
+  });
 }
 
 function addWatermark(inputPath, outputPath) {
