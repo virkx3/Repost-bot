@@ -39,74 +39,42 @@ const cheerio = require("cheerio");
 
 async function downloadReel(page, username) {
   const profileUrl = `${INSTAGRAM_URL}/${username}/reels/`;
-  await page.goto(profileUrl, { waitUntil: "domcontentloaded" });
-  await delay(3000);
+  await page.goto(profileUrl, { waitUntil: "networkidle2" });
+  await delay(4000);
 
   const links = await page.$$eval("a", (as) =>
     as.map((a) => a.href).filter((href) => href.includes("/reel/"))
   );
 
   if (!links.length) return null;
+
   const randomReel = links[Math.floor(Math.random() * links.length)];
   console.log(`🎯 Visiting: ${randomReel}`);
+  await page.goto(randomReel, { waitUntil: "networkidle2" });
+  await delay(4000);
 
-  // Step 1: Submit to SnapInsta
-  const formData = new URLSearchParams();
-  formData.append("url", randomReel);
+  const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
 
-  const { data: html } = await axios.post("https://snapinsta.app/action.php", formData.toString(), {
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "Mozilla/5.0",
-    },
-  });
+  // Evaluate and fetch video from inside page context
+  const success = await page.evaluate(async (outPath) => {
+    const video = document.querySelector("video");
+    if (!video || !video.src || video.src.startsWith("blob:")) return false;
 
-  // Step 2: Parse real .mp4 URL
-  const $ = cheerio.load(html);
-  const videoUrl = $("a.downloadBtn").attr("href");
+    const res = await fetch(video.src);
+    const buffer = await res.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-  if (!videoUrl || !videoUrl.endsWith(".mp4")) {
-    console.log("❌ No downloadable URL found");
+    // Communicate to Node.js to save base64 to file (via exposed function)
+    window.saveVideo(base64, outPath);
+    return true;
+  }, outPath);
+
+  if (!success) {
+    console.log("❌ No direct video URL found.\n⚠️ Skipping invalid reel...");
     return null;
   }
 
-  const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
-  const writer = fs.createWriteStream(outPath);
-
-  const response = await axios.get(videoUrl, { responseType: "stream", timeout: 60000 });
-  response.data.pipe(writer);
-
-  return new Promise((resolve) => {
-    writer.on("finish", () => {
-      console.log("✅ Reel downloaded from SnapInsta");
-      resolve(outPath);
-    });
-    writer.on("error", () => resolve(null));
-  });
-}
-
-function addWatermark(inputPath, outputPath) {
-  return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .videoFilters({
-        filter: "drawtext",
-        options: {
-          fontfile: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-          text: WATERMARK,
-          fontsize: 24,
-          fontcolor: "white",
-          x: "(w-text_w)-10",
-          y: "(h-text_h)-10",
-          box: 1,
-          boxcolor: "black@0.5",
-          boxborderw: 5,
-        },
-      })
-      .output(outputPath)
-      .on("end", () => resolve(outputPath))
-      .on("error", reject)
-      .run();
-  });
+  return outPath;
 }
 
 async function uploadReel(page, videoPath, caption) {
