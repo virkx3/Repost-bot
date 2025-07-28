@@ -5,8 +5,6 @@ const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
 const { execSync } = require("child_process");
-const dayjs = require("dayjs");
-
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -15,8 +13,10 @@ const INSTAGRAM_URL = "https://www.instagram.com";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
 const WATERMARK = "ig/ramn_preet05";
 const VIDEO_DIR = "downloads";
+const SCREENSHOT_DIR = "screenshots";
 
 if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
+if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR);
 
 function getRandomCaption() {
   const captions = fs.readFileSync("caption.txt", "utf8").split("\n").filter(Boolean);
@@ -91,58 +91,31 @@ function addWatermark(inputPath, outputPath) {
 
 async function uploadReel(page, videoPath, caption) {
   console.log("⏫ Uploading reel: ", videoPath);
-  // 👇 Add actual upload logic here if needed
+  // Replace with actual upload logic
   console.log("✅ Uploaded with caption:", caption);
 }
 
-async function commitAndPushScreenshot(filePath, message = "Upload error screenshot") {
+async function saveAndPushScreenshot(page, filename = `error-${Date.now()}.png`) {
+  const filePath = path.join(SCREENSHOT_DIR, filename);
+  await page.screenshot({ path: filePath });
+
   try {
-    const repo = process.env.REPO;
-    const token = process.env.GITHUB_TOKEN;
-    if (!repo || !token) {
-      console.warn("❌ GITHUB_TOKEN or REPO not set. Skipping GitHub upload.");
-      return;
-    }
-
-    const [owner, repoName] = repo.split("/");
-    const repoURL = `https://${token}@github.com/${owner}/${repoName}.git`;
-
-    execSync("git config --global user.email 'bot@example.com'");
-    execSync("git config --global user.name 'InstaBot'");
-
-    execSync("git pull", { stdio: "ignore" });
+    execSync(`git config --global user.email \"you@example.com\"`);
+    execSync(`git config --global user.name \"auto-bot\"`);
     execSync(`git add ${filePath}`);
-    execSync(`git commit -m \"${message}\"`, { stdio: "ignore" });
-    execSync(`git push ${repoURL} HEAD:main`);
-    console.log(`📤 Screenshot pushed to GitHub repo: ${repo}`);
+    execSync(`git commit -m \"Add screenshot ${filename}\"`);
+    execSync(`git push https://${process.env.GITHUB_TOKEN}@github.com/${process.env.REPO}.git main`);
+    console.log("📸 Screenshot pushed to GitHub.");
   } catch (err) {
     console.error("❌ Failed to push screenshot:", err.message);
   }
 }
 
 async function main() {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--window-size=1280,720",
-      "--hide-scrollbars",
-      "--mute-audio"
-    ],
-    defaultViewport: {
-      width: 1280,
-      height: 720,
-      isMobile: false
-    }
-  });
-
+  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0");
 
-  // Load session cookies
   if (fs.existsSync("session.json")) {
     const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
     await page.setCookie(...cookies);
@@ -179,12 +152,7 @@ async function main() {
       await delay(5 * 60 * 1000);
     } catch (err) {
       console.error("❌ Error:", err);
-      const screenshot = "fatal_error.png";
-      await page.waitForTimeout(3000);
-      await page.screenshot({ path: screenshot, fullPage: true });
-      const size = fs.statSync(screenshot).size;
-      console.log("📷 Screenshot size:", size);
-      await commitAndPushScreenshot(screenshot, "Fatal error screenshot");
+      await saveAndPushScreenshot(page);
       await delay(60000);
     }
   }
