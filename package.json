@@ -10,6 +10,7 @@
     "axios": "^1.6.0",
     "dayjs": "^1.11.10",
     "ffmpeg-static": "^5.1.0",
-    "puppeteer": "^22.8.2"
+    "fluent-ffmpeg": "^2.1.2",
+    "puppeteer": "^21.3.8"
   }
 }
