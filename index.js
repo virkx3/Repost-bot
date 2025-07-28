@@ -46,46 +46,57 @@ async function downloadReel(page, username) {
 
   if (!links.length) return null;
   const randomReel = links[Math.floor(Math.random() * links.length)];
+  await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
+  await delay(5000);
+
+  // Get video URL and determine download method
+  const videoUrl = await page.$eval("video", (v) => v.src);
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
 
-  let videoUrl = null;
+  if (videoUrl.startsWith('blob:')) {
+    console.log("📦 Handling blob URL video with XHR method");
+    try {
+      // Use XHR to fetch blob in browser context
+      const videoData = await page.evaluate(async (url) => {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.responseType = 'arraybuffer';
+          
+          xhr.onload = () => {
+            if (xhr.status === 200) {
+              resolve(Array.from(new Uint8Array(xhr.response)));
+            } else {
+              reject(new Error(`XHR failed with status ${xhr.status}`));
+            }
+          };
+          
+          xhr.onerror = () => reject(new Error('XHR failed'));
+          xhr.send();
+        });
+      }, videoUrl);
 
-  // Intercept real .mp4 video
-  const client = await page.target().createCDPSession();
-  await client.send('Network.enable');
-
-  client.on('Network.responseReceived', async ({ response }) => {
-    const url = response.url;
-    if (url.endsWith(".mp4") && url.includes("instagram")) {
-      videoUrl = url;
+      fs.writeFileSync(outPath, Buffer.from(videoData));
+      return outPath;
+    } catch (err) {
+      console.error("❌ Blob download failed:", err.message);
+      return null;
     }
-  });
-
-  await page.goto(randomReel, { waitUntil: "networkidle2", timeout: 30000 });
-  await delay(8000); // Allow time for network interception
-
-  if (!videoUrl) {
-    console.log("❌ No MP4 URL found. Video might be blob-only or Instagram protected.");
-    return null;
-  }
-
-  console.log("🎯 Captured video URL:", videoUrl);
-
-  try {
-    const res = await axios.get(videoUrl, {
-      responseType: "arraybuffer",
-      headers: {
-        "User-Agent": await page.evaluate(() => navigator.userAgent),
-        "Referer": randomReel,
-      },
-      timeout: 60000
-    });
-
-    fs.writeFileSync(outPath, res.data);
-    return outPath;
-  } catch (err) {
-    console.error("❌ Video download failed via Axios:", err.message);
-    return null;
+  } else {
+    console.log("🌐 Handling direct URL video");
+    try {
+      const response = await axios({
+        url: videoUrl,
+        method: 'GET',
+        responseType: 'arraybuffer',
+        timeout: 60000
+      });
+      fs.writeFileSync(outPath, response.data);
+      return outPath;
+    } catch (err) {
+      console.error("❌ Direct download failed:", err.message);
+      return null;
+    }
   }
 }
 
