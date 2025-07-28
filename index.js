@@ -69,3 +69,49 @@ function addWatermark(inputPath, outputPath) {
         }
       })
       .output(outputPath)
+      .on("end", () => resolve(outputPath))
+      .on("error", reject)
+      .run();
+  });
+}
+
+async function uploadReel(page, videoPath, caption) {
+  await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2", timeout: 60000 });
+  await delay(7000);
+
+  const fileInput = await page.$('input[type="file"]');
+  if (fileInput) await fileInput.uploadFile(videoPath);
+  else throw new Error("File input not found");
+
+  await delay(8000);
+
+  const nextBtn = await page.$x("//div[contains(text(),'Next')]");
+  if (nextBtn[0]) await nextBtn[0].click();
+  await delay(3000);
+
+  const captionInput = await page.$('textarea[aria-label="Write a caption"]');
+  if (captionInput) await captionInput.type(caption);
+  await delay(2000);
+
+  const shareBtn = await page.$x("//div[contains(text(),'Share')]");
+  if (shareBtn[0]) await shareBtn[0].click();
+  await delay(15000);
+  return true;
+}
+
+(async () => {
+  const { browser, desktopPage, mobilePage } = await launchContexts();
+  const reelUrl = "https://www.instagram.com/reel/REEL_ID_HERE/";
+  const filePath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+
+  try {
+    const downloaded = await downloadReel(desktopPage, reelUrl, filePath);
+    const watermarked = filePath.replace(".mp4", "_wm.mp4");
+    await addWatermark(downloaded, watermarked);
+    await uploadReel(mobilePage, watermarked, "🔥 New Reel #reels #bot");
+  } catch (err) {
+    console.error("❌ Error:", err.message);
+  } finally {
+    await browser.close();
+  }
+})();
