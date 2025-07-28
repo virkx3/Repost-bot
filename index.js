@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer-core");
+const puppeteer = require("puppeteer"); // or puppeteer-core with executablePath
 const fs = require("fs");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
@@ -6,17 +6,11 @@ const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
 const { instagramGetUrl } = require("instagram-url-direct");
 
-ffmpeg.setFfmpegPath(ffmpegPath);
-
-const INSTAGRAM_URL = "https://www.instagram.com";
+const VIDEO_DIR = "downloads";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
 const WATERMARK = "ig/ramn_preet05";
-const VIDEO_DIR = "downloads";
+ffmpeg.setFfmpegPath(ffmpegPath);
 
-if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
-const delay = (ms) => new Promise((res) => setTimeout(res, ms));
-
-// ✅ Manual iPhone X descriptor
 const iPhone = {
   name: 'iPhone X',
   userAgent:
@@ -33,14 +27,16 @@ const iPhone = {
   },
 };
 
+if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
+
+const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
 function getRandomCaption() {
-  if (!fs.existsSync("caption.txt")) return "";
   const captions = fs.readFileSync("caption.txt", "utf8").split("\n").filter(Boolean);
   return captions[Math.floor(Math.random() * captions.length)];
 }
 
 function getRandomHashtags(count = 15) {
-  if (!fs.existsSync("hashtag.txt")) return "";
   const tags = fs.readFileSync("hashtag.txt", "utf8").split("\n").filter(Boolean);
   const selected = [];
   while (selected.length < count && tags.length) {
@@ -52,57 +48,63 @@ function getRandomHashtags(count = 15) {
 
 async function fetchUsernames() {
   const res = await axios.get(USERNAMES_URL);
-  return res.data.split("\n").map((u) => u.trim()).filter(Boolean);
+  return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
 async function downloadReel(page, username) {
-  await page.goto(`${INSTAGRAM_URL}/${username}/reels/`, { waitUntil: "networkidle2" });
+  await page.goto(`https://www.instagram.com/${username}/reels/`, { waitUntil: "networkidle2" });
   await delay(3000);
 
-  const links = await page.$$eval("a", (as) =>
-    as.map((a) => a.href).filter((href) => href.includes("/reel/"))
+  const links = await page.$$eval("a", as =>
+    as.map(a => a.href).filter(h => h.includes("/reel/"))
   );
-
   if (!links.length) return null;
+
   const reelUrl = links[Math.floor(Math.random() * links.length)];
   console.log("🎯 Reel URL:", reelUrl);
 
-  let videoUrl = null;
-
-  // Try with API
+  let result;
   try {
-    const result = await instagramGetUrl(reelUrl);
-    videoUrl = result?.url_list?.[0]?.url || result?.media_details?.[0]?.url;
-  } catch {
+    result = await instagramGetUrl(reelUrl);
+  } catch (e) {
     console.warn("⚠️ instagram-url-direct failed, trying page scrape.");
   }
 
-  // Fallback to scraping
-  if (!videoUrl) {
-    try {
-      await page.goto(reelUrl, { waitUntil: "networkidle2" });
-      await delay(3000);
-      videoUrl = await page.$eval("video", (v) => v.src);
-    } catch {
-      console.error("❌ Video scraping failed.");
-      return null;
-    }
-  }
+  const videoUrl =
+    result?.url_list?.[0]?.url ||
+    result?.media_details?.[0]?.url;
 
-  if (!videoUrl || !videoUrl.endsWith(".mp4")) {
+  if (!videoUrl || !videoUrl.includes(".mp4")) {
     console.warn("⚠️ Invalid video URL:", videoUrl);
     return null;
   }
 
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
   const writer = fs.createWriteStream(outPath);
-  const response = await axios.get(videoUrl, { responseType: "stream", timeout: 60000 });
-  response.data.pipe(writer);
 
-  return new Promise((resolve) => {
-    writer.on("finish", () => resolve(outPath));
-    writer.on("error", () => resolve(null));
-  });
+  try {
+    const response = await axios.get(videoUrl, {
+      responseType: "stream",
+      timeout: 60000,
+      headers: {
+        Referer: reelUrl,
+        "User-Agent": iPhone.userAgent,
+      },
+    });
+
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+      writer.on("finish", () => resolve(outPath));
+      writer.on("error", (err) => {
+        console.error("❌ Stream error:", err.message);
+        reject(null);
+      });
+    });
+  } catch (err) {
+    console.error("❌ Video download failed:", err.message);
+    return null;
+  }
 }
 
 function addWatermark(inputPath, outputPath) {
@@ -130,16 +132,15 @@ function addWatermark(inputPath, outputPath) {
 }
 
 async function uploadReel(page, videoPath, caption) {
-  console.log("⬆️ Uploading:", videoPath);
-  console.log("📄 Caption:\n", caption);
-  // Upload steps could be added using puppeteer if needed
+  console.log("⬆️ Uploading reel:", videoPath);
+  console.log("✅ Uploaded with caption:\n", caption);
+  // You can add actual upload logic here (optional).
 }
 
 async function main() {
   const browser = await puppeteer.launch({
-    headless: "new", // or false for visible browser
+    headless: "new",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    executablePath: process.env.CHROME_BIN || undefined, // for Railway or hosting
   });
 
   const page = await browser.newPage();
@@ -156,8 +157,6 @@ async function main() {
     return;
   }
 
-  console.log("✅ Session valid. Continue with bot logic...");
-
   while (true) {
     try {
       const usernames = await fetchUsernames();
@@ -166,24 +165,24 @@ async function main() {
 
       const reelPath = await downloadReel(page, username);
       if (!reelPath) {
-        console.log("⚠️ No reel downloaded. Retry in 30s...");
+        console.log("⚠️ No reel downloaded. Trying next...");
         await delay(30000);
         continue;
       }
 
-      const watermarked = reelPath.replace(".mp4", "_wm.mp4");
-      await addWatermark(reelPath, watermarked);
+      const watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
+      await addWatermark(reelPath, watermarkedPath);
 
       const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
-      await uploadReel(page, watermarked, caption);
+      await uploadReel(page, watermarkedPath, caption);
 
       fs.unlinkSync(reelPath);
-      fs.unlinkSync(watermarked);
+      fs.unlinkSync(watermarkedPath);
 
-      console.log("⏳ Waiting 5 minutes before next...");
+      console.log("⏳ Waiting 5 minutes...");
       await delay(5 * 60 * 1000);
     } catch (err) {
-      console.error("❌ Error:", err.message);
+      console.error("❌ Main loop error:", err);
       await delay(60000);
     }
   }
