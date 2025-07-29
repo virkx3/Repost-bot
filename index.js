@@ -64,70 +64,112 @@ function addWatermark(inputPath, outputPath) {
   });
 }
 
-async function uploadToGitHub(filePath) {
-  try {
-    const octokit = new Octokit({ auth: GITHUB_TOKEN });
-    const content = fs.readFileSync(filePath, { encoding: "base64" });
-    const fileName = path.basename(filePath);
-    const now = new Date().toISOString().replace(/[:.]/g, "-");
 
-    await octokit.repos.createOrUpdateFileContents({
-      owner: REPO_OWNER,
-      repo: REPO_NAME,
-      path: `errors/${now}-${fileName}`,
-      message: `Upload error screenshot ${now}`,
-      content,
-      committer: { name: "Bot", email: "bot@example.com" },
-      author: { name: "Bot", email: "bot@example.com" },
+async function uploadReel(page, videoPath, caption) {
+  try {
+    console.log("⬆️ Uploading reel...");
+
+    if (!fs.existsSync(videoPath)) {
+      throw new Error(`❌ Video file not found at path: ${videoPath}`);
+    }
+
+    await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
+    await delay(5000);
+
+    // 1. Click Create
+    const [createBtn] = await page.$x("//span[contains(text(),'Create')]");
+    if (!createBtn) throw new Error("❌ Create button not found");
+    await createBtn.click();
+    console.log("🆕 Clicked Create");
+    await delay(3000);
+
+    // 2. Simulate drag-and-drop of file to center of screen
+    const input = await page.evaluateHandle(() => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'video/*';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      return input;
     });
 
-    console.log("📸 Screenshot pushed to GitHub");
-  } catch (err) {
-    console.error("❌ GitHub upload failed:", err.message);
-  }
-}
+    await input.uploadFile(videoPath);
 
-async function downloadFromIqsaved(page, reelUrl) {
-  try {
-    console.log("📥 Navigating to iqsaved...");
-    await page.goto("https://iqsaved.com/reel/", { waitUntil: "networkidle2", timeout: 60000 });
+    await page.evaluate(() => {
+      const input = document.querySelector('input[type="file"]');
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(input.files[0]);
 
-    await page.waitForSelector('input[name="url"]', { timeout: 15000 });
-    await page.type('input[name="url"]', reelUrl);
-    await page.keyboard.press('Enter');
-    console.log("✅ Submitted reel URL");
+      const dropZone = document.querySelector('div[role="dialog"]') || document.body;
 
-    await page.waitForTimeout(10000);
-    await page.evaluate(() => window.scrollBy(0, 500));
-
-    await page.waitForXPath("//a[contains(text(), 'Download video')]", { timeout: 15000 });
-    const [downloadLinkEl] = await page.$x("//a[contains(text(), 'Download video')]");
-    const downloadUrl = await page.evaluate(el => el.href, downloadLinkEl);
-
-    if (!downloadUrl || !downloadUrl.includes(".mp4")) throw new Error("❌ Failed to extract valid download URL.");
-
-    console.log("🎯 Download URL found:", downloadUrl);
-
-    const fileName = `reel_${Date.now()}.mp4`;
-    const outputPath = path.join("downloads", fileName);
-
-    const response = await axios({ method: "GET", url: downloadUrl, responseType: "stream" });
-    const writer = fs.createWriteStream(outputPath);
-    response.data.pipe(writer);
-
-    return new Promise((resolve, reject) => {
-      writer.on("finish", () => {
-        console.log("✅ Video downloaded:", fileName);
-        resolve(outputPath);
+      const event = new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
       });
-      writer.on("error", reject);
+
+      dropZone.dispatchEvent(event);
     });
+
+    console.log("🧲 File dropped onto Instagram UI");
+    await delay(8000);
+
+    // 3. Click "Original" crop
+    await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll("div[role='button']")];
+      const original = buttons.find(b => b.textContent?.trim().toLowerCase() === "original");
+      if (original) original.click();
+    });
+    console.log("🖼 Set to Original crop");
+    await delay(4000);
+
+    // 4. Click first Next
+    const next1 = await page.$x("//div[text()='Next']");
+    if (!next1.length) throw new Error("❌ First 'Next' button not found");
+    await next1[0].click();
+    console.log("➡️ Clicked first Next");
+    await delay(4000);
+
+    // 5. Click second Next
+    const next2 = await page.$x("//div[text()='Next']");
+    if (!next2.length) throw new Error("❌ Second 'Next' button not found");
+    await next2[0].click();
+    console.log("➡️ Clicked second Next");
+    await delay(4000);
+
+    // 6. Add caption
+    await page.evaluate((text) => {
+      const box = document.querySelector("div[role='textbox']");
+      if (box) {
+        box.focus();
+        const event = new InputEvent("input", { bubbles: true });
+        box.innerHTML = "";
+        document.execCommand("insertText", false, text);
+        box.dispatchEvent(event);
+      }
+    }, caption);
+    console.log("📝 Caption entered");
+    await delay(4000);
+
+    // 7. Click Share
+    const shareBtn = await page.$x("//div[text()='Share']");
+    if (!shareBtn.length) throw new Error("❌ Share button not found");
+    await shareBtn[0].click();
+    console.log("✅ Reel shared");
+    await delay(20000);
+
+    return true;
   } catch (err) {
-    console.error("❌ iqsaved download error:", err.message);
-    return null;
+    const timestamp = Date.now();
+    const screenshotPath = `upload_error_${timestamp}.png`;
+    await page.screenshot({ path: screenshotPath });
+    console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
+    if (typeof uploadToGitHub === "function") {
+      await uploadToGitHub(screenshotPath);
+    }
+    return false;
   }
 }
-
 
 
 async function uploadReel(page, videoPath, caption) {
