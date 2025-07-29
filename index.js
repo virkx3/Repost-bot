@@ -147,12 +147,7 @@ async function uploadReel(page, videoPath, caption) {
     console.log("🆕 Clicked Create");
     await delay(5000);
 
-  // 2. Try using file input directly
-  let fileInput = await page.$('input[type="file"][accept*=""]');
-
-  if (!fileInput) {
-    console.log("⚠️ File input not found — trying fallback brute-force clicking...");
-
+    
     // Add fake cursor
     await page.evaluate(() => {
       if (document.getElementById("fake-cursor")) return;
