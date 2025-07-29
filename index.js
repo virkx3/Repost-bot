@@ -134,44 +134,78 @@ async function uploadReel(page, videoPath, caption) {
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
     await delay(5000);
 
-    const createBtn = await page.$x("//span[contains(text(),'Create')]");
-    if (createBtn.length) await createBtn[0].click();
-    await delay(5000);
+    // 1. Click "Create"
+    const [createBtn] = await page.$x("//span[contains(text(),'Create')]");
+    if (createBtn) {
+      await createBtn.click();
+      console.log("🆕 Clicked Create");
+      await delay(4000);
+    } else {
+      throw new Error("❌ Create button not found");
+    }
 
-    const fileInput = await page.$('input[type="file"]');
-    if (!fileInput) throw new Error("❌ Upload input not found");
-    await fileInput.uploadFile(videoPath);
+    // 2. File chooser after clicking "Select from computer"
+    const [fileChooser] = await Promise.all([
+      page.waitForFileChooser(),
+      page.click('button:has-text("Select from computer")')
+    ]);
+    await fileChooser.accept([videoPath]);
     console.log("📤 Video selected");
-    await delay(10000);
+    await delay(8000); // wait for video preview to load
 
+    // 3. Click "Original"
+    await page.evaluate(() => {
+      const btns = [...document.querySelectorAll("div[role='button']")];
+      const originalBtn = btns.find(b => b.innerText?.toLowerCase() === "original");
+      if (originalBtn) originalBtn.click();
+    });
+    console.log("🖼 Set to Original crop");
+    await delay(4000);
+
+    // 4. Click first "Next"
     const nextBtns = await page.$x("//div[text()='Next']");
-    if (nextBtns.length > 0) {
+    if (nextBtns.length) {
       await nextBtns[0].click();
       console.log("➡️ Clicked first Next");
-      await delay(6000);
+      await delay(4000);
+    } else {
+      throw new Error("❌ First Next button not found");
     }
 
+    // 5. Click second "Next"
     const secondNext = await page.$x("//div[text()='Next']");
-    if (secondNext.length > 0) {
+    if (secondNext.length) {
       await secondNext[0].click();
       console.log("➡️ Clicked second Next");
-      await delay(6000);
+      await delay(4000);
+    } else {
+      throw new Error("❌ Second Next button not found");
     }
 
-    const captionSelector = 'textarea[aria-label="Write a caption"], div[role="textbox"]';
-    const captionField = await page.waitForSelector(captionSelector, { timeout: 15000 });
-    await captionField.type(caption, { delay: 50 });
+    // 6. Type caption
+    await page.evaluate((text) => {
+      const box = document.querySelector("div[role='textbox']");
+      if (box) {
+        box.focus();
+        const event = new InputEvent("input", { bubbles: true });
+        box.innerHTML = "";
+        document.execCommand("insertText", false, text);
+        box.dispatchEvent(event);
+      }
+    }, caption);
     console.log("📝 Caption entered");
+    await delay(4000);
 
+    // 7. Click "Share"
     const shareBtn = await page.$x("//div[text()='Share']");
     if (shareBtn.length) {
       await shareBtn[0].click();
       console.log("✅ Reel shared");
+      await delay(20000); // Allow time for upload to complete
     } else {
       throw new Error("❌ Share button not found");
     }
 
-    await delay(20000);
     return true;
   } catch (err) {
     const timestamp = Date.now();
