@@ -128,9 +128,24 @@ async function downloadFromIqsaved(page, reelUrl) {
   }
 }
 
+const fs = require("fs");
+const path = require("path");
+
 async function uploadReel(page, videoPath, caption) {
   try {
     console.log("⬆️ Uploading reel...");
+
+    // 📁 Debug: log current directory contents
+    console.log("📁 Current directory files:");
+    console.log(fs.readdirSync(process.cwd()));
+
+    // 🔍 Check video path
+    if (!fs.existsSync(videoPath)) {
+      throw new Error(`❌ Video file not found at path: ${videoPath}`);
+    }
+    console.log("✅ Video file exists:", videoPath);
+
+    // ⏳ Go to Instagram
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
     await delay(5000);
 
@@ -139,13 +154,14 @@ async function uploadReel(page, videoPath, caption) {
     if (!createBtn) throw new Error("❌ Create button not found");
     await createBtn.click();
     console.log("🆕 Clicked Create");
-    await delay(5000);
+    await delay(4000);
 
-    // 2. Drag-and-drop the video into drop zone
-    console.log("🖱 Simulating drag-and-drop...");
-    const input = await page.$('input[type="file"]');
-    if (!input) throw new Error("❌ File input not found for drag-and-drop");
-    await input.uploadFile(videoPath);
+    // 2. Use fallback: file input instead of button click
+    const fileInputSelector = 'input[type="file"]';
+    await page.waitForSelector(fileInputSelector, { visible: true, timeout: 10000 });
+
+    await page.setInputFiles(fileInputSelector, videoPath);
+    console.log("📤 Video uploaded via file input");
     await delay(8000); // wait for preview to load
 
     // 3. Click "Original" crop
@@ -193,15 +209,22 @@ async function uploadReel(page, videoPath, caption) {
     await delay(20000); // let upload finish
 
     return true;
+
   } catch (err) {
     const timestamp = Date.now();
     const screenshotPath = `upload_error_${timestamp}.png`;
     await page.screenshot({ path: screenshotPath });
     console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-    await uploadToGitHub(screenshotPath);
+
+    // If you have this helper
+    if (typeof uploadToGitHub === "function") {
+      await uploadToGitHub(screenshotPath);
+    }
+
     return false;
   }
 }
+
 async function main() {
   const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   const page = await browser.newPage();
