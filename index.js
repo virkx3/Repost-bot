@@ -130,8 +130,6 @@ async function downloadFromIqsaved(page, reelUrl) {
 
 
 
-const fs = require("fs");
-const path = require("path");
 
 async function uploadReel(page, videoPath, caption) {
   try {
