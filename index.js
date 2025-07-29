@@ -133,78 +133,83 @@ async function uploadReel(page, videoPath, caption) {
   try {
     console.log("⬆️ Uploading reel...");
 
+    if (!fs.existsSync(videoPath)) {
+      throw new Error(`❌ Video file not found at path: ${videoPath}`);
+    }
+
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
     await delay(5000);
 
     // 1. Click Create
-    const [createBtn] = await page.$x("//span[contains(text(),'Create')]");
+    const [createBtn] = await page.$x("//div[text()='Create']");
     if (!createBtn) throw new Error("❌ Create button not found");
     await createBtn.click();
     console.log("🆕 Clicked Create");
-    await delay(4000);
+    await delay(3000);
 
-    // 2. Wait for native input[type="file"]
-    const fileInput = await page.waitForSelector('input[type="file"]', { timeout: 10000 });
+    // 2. Use Instagram's native file input
+    const fileInput = await page.$('input[type="file"][accept*="video/"]');
     if (!fileInput) throw new Error("❌ File input not found");
-
+    
     await fileInput.uploadFile(videoPath);
-    console.log("📤 File uploaded to Instagram");
+    console.log("📤 Video file attached");
+    await delay(8000);  // Wait for processing
 
-    await delay(8000); // wait for preview UI
-
-    // 3. Set to Original Crop
+    // 3. Handle crop selector
     await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll("div[role='button']"));
-      const originalBtn = buttons.find(b => b.textContent?.trim().toLowerCase() === "original");
+      const buttons = [...document.querySelectorAll("div[role='button']")];
+      const originalBtn = buttons.find(b => 
+        b.textContent?.toLowerCase().includes("original")
+      );
       if (originalBtn) originalBtn.click();
     });
     console.log("🖼 Set to Original crop");
     await delay(4000);
 
-    // 4. Click Next
-    const next1 = await page.$x("//div[text()='Next']");
-    if (!next1.length) throw new Error("❌ First 'Next' button not found");
-    await next1[0].click();
-    console.log("➡️ Clicked first Next");
-    await delay(4000);
-
-    // 5. Click Next again
-    const next2 = await page.$x("//div[text()='Next']");
-    if (!next2.length) throw new Error("❌ Second 'Next' button not found");
-    await next2[0].click();
-    console.log("➡️ Clicked second Next");
-    await delay(4000);
-
-    // 6. Enter Caption
-    await page.evaluate((text) => {
-      const box = document.querySelector("div[role='textbox']");
-      if (box) {
-        box.focus();
-        box.innerText = text;
-        const inputEvent = new InputEvent("input", { bubbles: true });
-        box.dispatchEvent(inputEvent);
+    // 4. First Next button
+    const nextButtons = await page.$$('div[role="button"]');
+    for (const button of nextButtons) {
+      const text = await page.evaluate(el => el.textContent, button);
+      if (text.includes('Next')) {
+        await button.click();
+        console.log("➡️ Clicked first Next");
+        await delay(4000);
+        break;
       }
-    }, caption);
+    }
+
+    // 5. Second Next button
+    for (const button of nextButtons) {
+      const text = await page.evaluate(el => el.textContent, button);
+      if (text.includes('Next')) {
+        await button.click();
+        console.log("➡️ Clicked second Next");
+        await delay(4000);
+        break;
+      }
+    }
+
+    // 6. Add caption
+    await page.type('div[role="textbox"]', caption, { delay: 50 });
     console.log("📝 Caption entered");
-    await delay(4000);
+    await delay(2000);
 
-    // 7. Share
-    const shareBtn = await page.$x("//div[text()='Share']");
-    if (!shareBtn.length) throw new Error("❌ Share button not found");
-    await shareBtn[0].click();
-    console.log("✅ Reel shared");
-    await delay(20000);
-
-    return true;
-
+    // 7. Share button
+    const shareButton = await page.$x('//div[text()="Share"]');
+    if (shareButton.length > 0) {
+      await shareButton[0].click();
+      console.log("✅ Reel shared");
+      await delay(20000);  // Wait for upload completion
+      return true;
+    }
+    
+    throw new Error("❌ Share button not found");
   } catch (err) {
     const timestamp = Date.now();
     const screenshotPath = `upload_error_${timestamp}.png`;
     await page.screenshot({ path: screenshotPath });
     console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-    if (typeof uploadToGitHub === "function") {
-      await uploadToGitHub(screenshotPath);
-    }
+    if (GITHUB_TOKEN) await uploadToGitHub(screenshotPath);
     return false;
   }
 }
