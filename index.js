@@ -131,16 +131,15 @@ async function downloadFromIqsaved(page, reelUrl) {
 async function uploadReel(page, videoPath, caption) {
   console.log("⬆️ Uploading reel...");
 
-  // Click Create / New Post
-const createBtns = await page.$x(
-  "//button[.//svg[@aria-label='New post']] | //button[.//span[contains(text(),'Create')]]"
-);
-if (!createBtns.length) {
-  throw new Error("❌ Create (New post) button not found");
-}
-await createBtns[0].click();
-console.log("🆕 Clicked Create / New Post");
-await delay(5000);
+      // 1. Click "Create"
+    const [createBtn] = await page.$x("//span[contains(text(),'Create')]");
+    if (createBtn) {
+      await createBtn.click();
+      console.log("🆕 Clicked Create");
+      await delay(4000);
+    } else {
+      throw new Error("❌ Create button not found");
+    }
 
   // Wait for input[type="file"] and upload file directly
   await page.waitForSelector('input[type="file"]', { visible: true, timeout: 10000 });
