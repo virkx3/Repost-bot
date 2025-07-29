@@ -280,6 +280,7 @@ async function uploadReel(page, videoPath, caption) {
   console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
   if (GITHUB_TOKEN) await uploadToGitHub(screenshotPath);
   return false;
+ }
 }
 
 async function main() {
