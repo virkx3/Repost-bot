@@ -141,11 +141,11 @@ async function uploadReel(page, videoPath, caption) {
   await delay(5000);
 
   // 1. Click Create
-  const [createBtn] = await page.$x("//div[text()='Create']");
-  if (!createBtn) throw new Error("❌ Create button not found");
-  await createBtn.click();
-  console.log("🆕 Clicked Create");
-  await delay(3000);
+    const [createBtn] = await page.$x("//div[text()='Create']");
+    if (!createBtn) throw new Error("❌ Create button not found");
+    await createBtn.click();
+    console.log("🆕 Clicked Create");
+    await delay(3000);
 
   // 2. Try using file input directly
   let fileInput = await page.$('input[type="file"][accept*="video/"]');
