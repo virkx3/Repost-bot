@@ -132,24 +132,21 @@ async function uploadReel(page, videoPath, caption) {
   try {
     console.log("⬆️ Uploading reel...");
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
-    await delay(5000); // wait for Instagram home
+    await delay(5000);
 
     // 1. Click "Create"
     const [createBtn] = await page.$x("//span[contains(text(),'Create')]");
-    if (createBtn) {
-      await createBtn.click();
-      console.log("🆕 Clicked Create");
-      await delay(4000);
-    } else {
-      throw new Error("❌ Create button not found");
-    }
+    if (!createBtn) throw new Error("❌ Create button not found");
+    await createBtn.click();
+    console.log("🆕 Clicked Create");
+    await delay(5000);
 
-    // 2. Upload video using the hidden input[type="file"]
-    const fileInput = await page.$("input[type='file']");
-    if (!fileInput) throw new Error("❌ File input not found for 'Select from computer'");
-    await fileInput.uploadFile(videoPath);
-    console.log("📤 Video selected");
-    await delay(8000); // wait for preview UI to load
+    // 2. Drag-and-drop the video into drop zone
+    console.log("🖱 Simulating drag-and-drop...");
+    const input = await page.$('input[type="file"]');
+    if (!input) throw new Error("❌ File input not found for drag-and-drop");
+    await input.uploadFile(videoPath);
+    await delay(8000); // wait for preview to load
 
     // 3. Click "Original" crop
     await page.evaluate(() => {
@@ -193,7 +190,7 @@ async function uploadReel(page, videoPath, caption) {
     if (!shareBtn.length) throw new Error("❌ Share button not found");
     await shareBtn[0].click();
     console.log("✅ Reel shared");
-    await delay(20000); // wait for upload to complete
+    await delay(20000); // let upload finish
 
     return true;
   } catch (err) {
@@ -201,11 +198,10 @@ async function uploadReel(page, videoPath, caption) {
     const screenshotPath = `upload_error_${timestamp}.png`;
     await page.screenshot({ path: screenshotPath });
     console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-    await uploadToGitHub(screenshotPath); // assuming this function exists
+    await uploadToGitHub(screenshotPath);
     return false;
   }
 }
-
 async function main() {
   const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   const page = await browser.newPage();
