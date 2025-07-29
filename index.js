@@ -10,9 +10,8 @@ puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const VIDEO_DIR = "downloads";
-const WATERMARK = "ig/your_username";
+const WATERMARK = "ig/ramn_preet05";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
-const INSTAGRAM_URL = "https://www.instagram.com";
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
@@ -62,47 +61,60 @@ function addWatermark(inputPath, outputPath) {
 }
 
 async function downloadFromIqsaved(page, reelUrl) {
-  const iqsavedUrl = "https://iqsaved.com/reel/";
-  await page.goto("https://iqsaved.com/reel/", { waitUntil: "domcontentloaded", timeout: 60000 });
-await delay(5000); // Wait for dynamic JS to render input
+  try {
+    const iqsavedUrl = "https://iqsaved.com/reel/";
+    await page.goto(iqsavedUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await delay(5000);
 
-// Use general selector
-await page.waitForSelector('input[type="text"]', { timeout: 20000 });
-await page.type('input[type="text"]', reelLink);
-await page.keyboard.press('Enter');
+    await page.waitForSelector('input[type="text"]', { timeout: 20000 });
+    await page.type('input[type="text"]', reelUrl);
+    await page.keyboard.press("Enter");
 
-console.log("✅ Link pasted and submitted. Waiting for download button...");
+    console.log("✅ Link submitted to iqsaved");
 
-// Wait for download section
-await delay(12000);
-await page.evaluate(() => window.scrollBy(0, 500));
-await delay(2000);
+    await delay(12000); // Wait for processing
+    await page.evaluate(() => window.scrollBy(0, 500));
+    await delay(2000);
 
-// Find and click the download button
-const downloadBtn = await page.$x("//a[contains(., 'Download Video')]");
-if (downloadBtn.length > 0) {
-  await downloadBtn[0].click();
-  console.log("📥 Clicked Download Video button");
-} else {
-  throw new Error("❌ Download button not found");
-}
-  console.log("✅ Found video URL:", videoUrl);
+    const downloadBtn = await page.$x("//a[contains(., 'Download Video')]");
+    if (!downloadBtn.length) throw new Error("❌ Download button not found");
+    await downloadBtn[0].click();
+    console.log("📥 Clicked 'Download Video' button");
 
-  const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
-  const response = await axios({
-    url: videoUrl,
-    method: "GET",
-    responseType: "stream",
-    timeout: 60000
-  });
+    await delay(5000);
 
-  const writer = fs.createWriteStream(outPath);
-  response.data.pipe(writer);
+    const videoUrl = await page.evaluate(() => {
+      const link = Array.from(document.querySelectorAll("a")).find(a =>
+        a.textContent.includes("Download Video")
+      );
+      return link ? link.href : null;
+    });
 
-  return new Promise((resolve, reject) => {
-    writer.on("finish", () => resolve(outPath));
-    writer.on("error", reject);
-  });
+    if (!videoUrl || !videoUrl.endsWith(".mp4")) {
+      throw new Error("❌ Failed to extract valid .mp4 URL");
+    }
+
+    console.log("✅ Found video URL:", videoUrl);
+
+    const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+    const response = await axios({
+      url: videoUrl,
+      method: "GET",
+      responseType: "stream",
+      timeout: 60000
+    });
+
+    const writer = fs.createWriteStream(outPath);
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+      writer.on("finish", () => resolve(outPath));
+      writer.on("error", reject);
+    });
+  } catch (err) {
+    console.error("❌ Download error:", err.message);
+    return null;
+  }
 }
 
 async function uploadReel(page, videoPath, caption) {
@@ -151,11 +163,7 @@ async function uploadReel(page, videoPath, caption) {
 async function main() {
   const browser = await puppeteer.launch({
     headless: "new",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage"
-    ]
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
 
   const page = await browser.newPage();
@@ -174,7 +182,6 @@ async function main() {
 
   while (true) {
     let reelPath, watermarkedPath;
-
     try {
       const usernames = await fetchUsernames();
       const username = usernames[Math.floor(Math.random() * usernames.length)];
@@ -213,7 +220,7 @@ async function main() {
 
     } catch (err) {
       console.error("❌ Loop error:", err.message);
-      await delay(180000); // 3 min delay on failure
+      await delay(180000);
     } finally {
       if (reelPath && fs.existsSync(reelPath)) fs.unlinkSync(reelPath);
       if (watermarkedPath && fs.existsSync(watermarkedPath)) fs.unlinkSync(watermarkedPath);
