@@ -129,15 +129,9 @@ async function downloadFromIqsaved(page, reelUrl) {
 }
 
 
-
-
 async function uploadReel(page, videoPath, caption) {
   try {
     console.log("⬆️ Uploading reel...");
-
-    if (!fs.existsSync(videoPath)) {
-      throw new Error(`❌ Video file not found at path: ${videoPath}`);
-    }
 
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
     await delay(5000);
@@ -147,77 +141,54 @@ async function uploadReel(page, videoPath, caption) {
     if (!createBtn) throw new Error("❌ Create button not found");
     await createBtn.click();
     console.log("🆕 Clicked Create");
-    await delay(3000);
+    await delay(4000);
 
-    // 2. Simulate drag-and-drop of file to center of screen
-    const input = await page.evaluateHandle(() => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'video/*';
-      input.style.display = 'none';
-      document.body.appendChild(input);
-      return input;
-    });
+    // 2. Wait for native input[type="file"]
+    const fileInput = await page.waitForSelector('input[type="file"]', { timeout: 10000 });
+    if (!fileInput) throw new Error("❌ File input not found");
 
-    await input.uploadFile(videoPath);
+    await fileInput.uploadFile(videoPath);
+    console.log("📤 File uploaded to Instagram");
 
+    await delay(8000); // wait for preview UI
+
+    // 3. Set to Original Crop
     await page.evaluate(() => {
-      const input = document.querySelector('input[type="file"]');
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(input.files[0]);
-
-      const dropZone = document.querySelector('div[role="dialog"]') || document.body;
-
-      const event = new DragEvent('drop', {
-        bubbles: true,
-        cancelable: true,
-        dataTransfer,
-      });
-
-      dropZone.dispatchEvent(event);
-    });
-
-    console.log("🧲 File dropped onto Instagram UI");
-    await delay(8000);
-
-    // 3. Click "Original" crop
-    await page.evaluate(() => {
-      const buttons = [...document.querySelectorAll("div[role='button']")];
-      const original = buttons.find(b => b.textContent?.trim().toLowerCase() === "original");
-      if (original) original.click();
+      const buttons = Array.from(document.querySelectorAll("div[role='button']"));
+      const originalBtn = buttons.find(b => b.textContent?.trim().toLowerCase() === "original");
+      if (originalBtn) originalBtn.click();
     });
     console.log("🖼 Set to Original crop");
     await delay(4000);
 
-    // 4. Click first Next
+    // 4. Click Next
     const next1 = await page.$x("//div[text()='Next']");
     if (!next1.length) throw new Error("❌ First 'Next' button not found");
     await next1[0].click();
     console.log("➡️ Clicked first Next");
     await delay(4000);
 
-    // 5. Click second Next
+    // 5. Click Next again
     const next2 = await page.$x("//div[text()='Next']");
     if (!next2.length) throw new Error("❌ Second 'Next' button not found");
     await next2[0].click();
     console.log("➡️ Clicked second Next");
     await delay(4000);
 
-    // 6. Add caption
+    // 6. Enter Caption
     await page.evaluate((text) => {
       const box = document.querySelector("div[role='textbox']");
       if (box) {
         box.focus();
-        const event = new InputEvent("input", { bubbles: true });
-        box.innerHTML = "";
-        document.execCommand("insertText", false, text);
-        box.dispatchEvent(event);
+        box.innerText = text;
+        const inputEvent = new InputEvent("input", { bubbles: true });
+        box.dispatchEvent(inputEvent);
       }
     }, caption);
     console.log("📝 Caption entered");
     await delay(4000);
 
-    // 7. Click Share
+    // 7. Share
     const shareBtn = await page.$x("//div[text()='Share']");
     if (!shareBtn.length) throw new Error("❌ Share button not found");
     await shareBtn[0].click();
@@ -225,6 +196,7 @@ async function uploadReel(page, videoPath, caption) {
     await delay(20000);
 
     return true;
+
   } catch (err) {
     const timestamp = Date.now();
     const screenshotPath = `upload_error_${timestamp}.png`;
