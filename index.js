@@ -144,45 +144,12 @@ async function uploadReel(page, videoPath, caption) {
       throw new Error("❌ Create button not found");
     }
 
-    // 2. Click "Select from computer" via fallback coordinates
-    const fileChooserPromise = page.waitForFileChooser();
-
-    // Show fake cursor for debug (optional)
-    await page.evaluate(() => {
-      if (document.getElementById("fake-cursor")) return;
-      const cursor = document.createElement("div");
-      cursor.id = "fake-cursor";
-      cursor.style.position = "fixed";
-      cursor.style.width = "20px";
-      cursor.style.height = "20px";
-      cursor.style.border = "2px solid red";
-      cursor.style.borderRadius = "50%";
-      cursor.style.zIndex = "9999";
-      cursor.style.pointerEvents = "none";
-      cursor.style.transition = "top 0.05s, left 0.05s";
-      document.body.appendChild(cursor);
-    });
-
-    const moveCursor = async (x, y) => {
-      await page.evaluate((x, y) => {
-        const c = document.getElementById('fake-cursor');
-        if (c) {
-          c.style.left = `${x}px`;
-          c.style.top = `${y}px`;
-        }
-      }, x, y);
-      await page.mouse.move(x, y);
-    };
-
-    console.log("🖱 Clicking 'Select from computer' via fallback...");
-    await moveCursor(682, 470);
-    await delay(300);
-    await page.mouse.click(682, 470);
-
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.accept([videoPath]);
+    // 2. Upload video using the hidden input[type="file"]
+    const fileInput = await page.$("input[type='file']");
+    if (!fileInput) throw new Error("❌ File input not found for 'Select from computer'");
+    await fileInput.uploadFile(videoPath);
     console.log("📤 Video selected");
-    await delay(8000); // let preview UI load
+    await delay(8000); // wait for preview UI to load
 
     // 3. Click "Original" crop
     await page.evaluate(() => {
@@ -226,16 +193,15 @@ async function uploadReel(page, videoPath, caption) {
     if (!shareBtn.length) throw new Error("❌ Share button not found");
     await shareBtn[0].click();
     console.log("✅ Reel shared");
-    await delay(20000); // let upload finish
+    await delay(20000); // wait for upload to complete
 
     return true;
-
   } catch (err) {
     const timestamp = Date.now();
     const screenshotPath = `upload_error_${timestamp}.png`;
     await page.screenshot({ path: screenshotPath });
     console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-    await uploadToGitHub(screenshotPath); // assuming you already have this
+    await uploadToGitHub(screenshotPath); // assuming this function exists
     return false;
   }
 }
