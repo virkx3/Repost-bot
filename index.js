@@ -61,24 +61,29 @@ function addWatermark(inputPath, outputPath) {
   });
 }
 
-async function downloadFromIqsaved(page, reelUrl) {
-  const iqsavedUrl = "https://iqsaved.com/reel/";
-  await page.goto(iqsavedUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForSelector("#url-box", { timeout: 10000 });
+await page.goto("https://iqsaved.com/reel/", { waitUntil: "domcontentloaded", timeout: 60000 });
+await delay(5000); // Wait for dynamic JS to render input
 
-  await page.type("#url-box", reelUrl);
-  await page.keyboard.press("Enter");
-  await delay(10000);
+// Use general selector
+await page.waitForSelector('input[type="text"]', { timeout: 20000 });
+await page.type('input[type="text"]', reelLink);
+await page.keyboard.press('Enter');
 
-  await page.evaluate(() => window.scrollBy(0, 500));
-  await delay(3000);
+console.log("✅ Link pasted and submitted. Waiting for download button...");
 
-  const downloadBtn = await page.$('a[href*=".mp4"]');
-  if (!downloadBtn) throw new Error("❌ No download button found");
+// Wait for download section
+await delay(12000);
+await page.evaluate(() => window.scrollBy(0, 500));
+await delay(2000);
 
-  const videoUrl = await page.evaluate(el => el.href, downloadBtn);
-  if (!videoUrl) throw new Error("❌ Video URL not found");
-
+// Find and click the download button
+const downloadBtn = await page.$x("//a[contains(., 'Download Video')]");
+if (downloadBtn.length > 0) {
+  await downloadBtn[0].click();
+  console.log("📥 Clicked Download Video button");
+} else {
+  throw new Error("❌ Download button not found");
+}
   console.log("✅ Found video URL:", videoUrl);
 
   const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
