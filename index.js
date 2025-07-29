@@ -132,7 +132,7 @@ async function uploadReel(page, videoPath, caption) {
   try {
     console.log("⬆️ Uploading reel...");
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
-    await delay(5000);
+    await delay(5000); // wait for Instagram home
 
     // 1. Click "Create"
     const [createBtn] = await page.$x("//span[contains(text(),'Create')]");
@@ -144,45 +144,40 @@ async function uploadReel(page, videoPath, caption) {
       throw new Error("❌ Create button not found");
     }
 
-    // 2. File chooser after clicking "Select from computer"
-    const [fileChooser] = await Promise.all([
-      page.waitForFileChooser(),
-      page.click('button:has-text("Select from computer")')
-    ]);
+    // 2. Click "Select from computer" using XPath
+    const fileChooserPromise = page.waitForFileChooser();
+    const selectBtn = await page.$x('/html/body/div[5]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[2]/div[1]/div/div/div[2]/div/button');
+    if (!selectBtn.length) throw new Error("❌ 'Select from computer' button not found");
+    await selectBtn[0].click();
+    const fileChooser = await fileChooserPromise;
     await fileChooser.accept([videoPath]);
     console.log("📤 Video selected");
-    await delay(8000); // wait for video preview to load
+    await delay(8000); // let preview UI load
 
-    // 3. Click "Original"
+    // 3. Click "Original" crop
     await page.evaluate(() => {
-      const btns = [...document.querySelectorAll("div[role='button']")];
-      const originalBtn = btns.find(b => b.innerText?.toLowerCase() === "original");
-      if (originalBtn) originalBtn.click();
+      const buttons = [...document.querySelectorAll("div[role='button']")];
+      const original = buttons.find(b => b.textContent?.trim().toLowerCase() === "original");
+      if (original) original.click();
     });
     console.log("🖼 Set to Original crop");
     await delay(4000);
 
     // 4. Click first "Next"
-    const nextBtns = await page.$x("//div[text()='Next']");
-    if (nextBtns.length) {
-      await nextBtns[0].click();
-      console.log("➡️ Clicked first Next");
-      await delay(4000);
-    } else {
-      throw new Error("❌ First Next button not found");
-    }
+    const next1 = await page.$x("//div[text()='Next']");
+    if (!next1.length) throw new Error("❌ First 'Next' button not found");
+    await next1[0].click();
+    console.log("➡️ Clicked first Next");
+    await delay(4000);
 
     // 5. Click second "Next"
-    const secondNext = await page.$x("//div[text()='Next']");
-    if (secondNext.length) {
-      await secondNext[0].click();
-      console.log("➡️ Clicked second Next");
-      await delay(4000);
-    } else {
-      throw new Error("❌ Second Next button not found");
-    }
+    const next2 = await page.$x("//div[text()='Next']");
+    if (!next2.length) throw new Error("❌ Second 'Next' button not found");
+    await next2[0].click();
+    console.log("➡️ Clicked second Next");
+    await delay(4000);
 
-    // 6. Type caption
+    // 6. Enter caption
     await page.evaluate((text) => {
       const box = document.querySelector("div[role='textbox']");
       if (box) {
@@ -198,13 +193,10 @@ async function uploadReel(page, videoPath, caption) {
 
     // 7. Click "Share"
     const shareBtn = await page.$x("//div[text()='Share']");
-    if (shareBtn.length) {
-      await shareBtn[0].click();
-      console.log("✅ Reel shared");
-      await delay(20000); // Allow time for upload to complete
-    } else {
-      throw new Error("❌ Share button not found");
-    }
+    if (!shareBtn.length) throw new Error("❌ Share button not found");
+    await shareBtn[0].click();
+    console.log("✅ Reel shared");
+    await delay(20000); // let upload finish
 
     return true;
   } catch (err) {
@@ -212,7 +204,7 @@ async function uploadReel(page, videoPath, caption) {
     const screenshotPath = `upload_error_${timestamp}.png`;
     await page.screenshot({ path: screenshotPath });
     console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-    await uploadToGitHub(screenshotPath);
+    await uploadToGitHub(screenshotPath); // assuming you already have this
     return false;
   }
 }
