@@ -62,57 +62,53 @@ function addWatermark(inputPath, outputPath) {
 
 async function downloadFromIqsaved(page, reelUrl) {
   try {
-    const iqsavedUrl = "https://iqsaved.com/reel/";
-    await page.goto(iqsavedUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await delay(5000);
+    console.log("📥 Navigating to iqsaved...");
+    await page.goto("https://iqsaved.com/reel/", { waitUntil: "networkidle2", timeout: 60000 });
 
-    await page.waitForSelector('input[type="text"]', { timeout: 20000 });
-    await page.type('input[type="text"]', reelUrl);
-    await page.keyboard.press("Enter");
+    // Wait for the input box
+    await page.waitForSelector('input[name="url"]', { timeout: 15000 });
+    await page.type('input[name="url"]', reelUrl);
+    await page.keyboard.press('Enter');
+    console.log("✅ Submitted reel URL");
 
-    console.log("✅ Link submitted to iqsaved");
+    // Wait for processing
+    await page.waitForTimeout(10000); // wait 10 seconds
+    await page.evaluate(() => window.scrollBy(0, 500)); // scroll to reveal button
 
-    await delay(12000); // Wait for processing
-    await page.evaluate(() => window.scrollBy(0, 500));
-    await delay(2000);
+    // Wait for the download button
+    await page.waitForXPath("//a[contains(text(), 'Download video')]", { timeout: 15000 });
+    const [downloadLinkEl] = await page.$x("//a[contains(text(), 'Download video')]");
+    const downloadUrl = await page.evaluate(el => el.href, downloadLinkEl);
 
-    const downloadBtn = await page.$x("//a[contains(., 'Download Video')]");
-    if (!downloadBtn.length) throw new Error("❌ Download button not found");
-    await downloadBtn[0].click();
-    console.log("📥 Clicked 'Download Video' button");
-
-    await delay(5000);
-
-    const videoUrl = await page.evaluate(() => {
-      const link = Array.from(document.querySelectorAll("a")).find(a =>
-        a.textContent.includes("Download Video")
-      );
-      return link ? link.href : null;
-    });
-
-    if (!videoUrl || !videoUrl.endsWith(".mp4")) {
-      throw new Error("❌ Failed to extract valid .mp4 URL");
+    if (!downloadUrl || !downloadUrl.includes(".mp4")) {
+      throw new Error("❌ Failed to extract valid download URL.");
     }
 
-    console.log("✅ Found video URL:", videoUrl);
+    console.log("🎯 Download URL found:", downloadUrl);
 
-    const outPath = path.join(VIDEO_DIR, `reel_${Date.now()}.mp4`);
+    // Start downloading the video
+    const fileName = `reel_${Date.now()}.mp4`;
+    const outputPath = path.join("downloads", fileName);
+
     const response = await axios({
-      url: videoUrl,
       method: "GET",
-      responseType: "stream",
-      timeout: 60000
+      url: downloadUrl,
+      responseType: "stream"
     });
 
-    const writer = fs.createWriteStream(outPath);
+    const writer = fs.createWriteStream(outputPath);
     response.data.pipe(writer);
 
     return new Promise((resolve, reject) => {
-      writer.on("finish", () => resolve(outPath));
+      writer.on("finish", () => {
+        console.log("✅ Video downloaded:", fileName);
+        resolve(outputPath);
+      });
       writer.on("error", reject);
     });
+
   } catch (err) {
-    console.error("❌ Download error:", err.message);
+    console.error("❌ iqsaved download error:", err.message);
     return null;
   }
 }
