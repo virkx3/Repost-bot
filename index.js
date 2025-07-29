@@ -129,21 +129,17 @@ async function downloadFromIqsaved(page, reelUrl) {
 }
 
 
+
 async function uploadReel(page, videoPath, caption) {
   try {
     console.log("⬆️ Uploading reel...");
 
-    // 📁 Debug: log current directory contents
-    console.log("📁 Current directory files:");
-    console.log(fs.readdirSync(process.cwd()));
-
-    // 🔍 Check video path
     if (!fs.existsSync(videoPath)) {
       throw new Error(`❌ Video file not found at path: ${videoPath}`);
     }
+
     console.log("✅ Video file exists:", videoPath);
 
-    // ⏳ Go to Instagram
     await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
     await delay(5000);
 
@@ -152,40 +148,49 @@ async function uploadReel(page, videoPath, caption) {
     if (!createBtn) throw new Error("❌ Create button not found");
     await createBtn.click();
     console.log("🆕 Clicked Create");
-    await delay(4000);
+    await delay(3000);
 
-    // 2. Use fallback: file input instead of button click
-    const fileInputSelector = 'input[type="file"]';
-    await page.waitForSelector(fileInputSelector, { visible: true, timeout: 10000 });
-
-    await page.setInputFiles(fileInputSelector, videoPath);
-    console.log("📤 Video uploaded via file input");
-    await delay(8000); // wait for preview to load
-
-    // 3. Click "Original" crop
+    // 2. Inject <input type="file"> manually
     await page.evaluate(() => {
-      const buttons = [...document.querySelectorAll("div[role='button']")];
-      const original = buttons.find(b => b.textContent?.trim().toLowerCase() === "original");
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "video/*";
+      input.style.display = "none";
+      input.id = "custom-upload-input";
+      document.body.appendChild(input);
+    });
+
+    // 3. Set the file using Puppeteer
+    const customInput = await page.$("#custom-upload-input");
+    if (!customInput) throw new Error("❌ Failed to inject file input");
+    await customInput.uploadFile(videoPath);
+    console.log("📤 File injected via custom input");
+    await delay(7000); // Let preview load
+
+    // 4. Crop to "Original"
+    await page.evaluate(() => {
+      const btns = [...document.querySelectorAll("div[role='button']")];
+      const original = btns.find(b => b.textContent?.trim().toLowerCase() === "original");
       if (original) original.click();
     });
-    console.log("🖼 Set to Original crop");
+    console.log("🖼 Set crop to Original");
     await delay(4000);
 
-    // 4. Click first "Next"
+    // 5. Click first “Next”
     const next1 = await page.$x("//div[text()='Next']");
     if (!next1.length) throw new Error("❌ First 'Next' button not found");
     await next1[0].click();
     console.log("➡️ Clicked first Next");
     await delay(4000);
 
-    // 5. Click second "Next"
+    // 6. Click second “Next”
     const next2 = await page.$x("//div[text()='Next']");
     if (!next2.length) throw new Error("❌ Second 'Next' button not found");
     await next2[0].click();
     console.log("➡️ Clicked second Next");
     await delay(4000);
 
-    // 6. Enter caption
+    // 7. Enter caption
     await page.evaluate((text) => {
       const box = document.querySelector("div[role='textbox']");
       if (box) {
@@ -199,12 +204,12 @@ async function uploadReel(page, videoPath, caption) {
     console.log("📝 Caption entered");
     await delay(4000);
 
-    // 7. Click "Share"
+    // 8. Click “Share”
     const shareBtn = await page.$x("//div[text()='Share']");
     if (!shareBtn.length) throw new Error("❌ Share button not found");
     await shareBtn[0].click();
     console.log("✅ Reel shared");
-    await delay(20000); // let upload finish
+    await delay(20000);
 
     return true;
 
@@ -213,12 +218,9 @@ async function uploadReel(page, videoPath, caption) {
     const screenshotPath = `upload_error_${timestamp}.png`;
     await page.screenshot({ path: screenshotPath });
     console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-
-    // If you have this helper
     if (typeof uploadToGitHub === "function") {
       await uploadToGitHub(screenshotPath);
     }
-
     return false;
   }
 }
