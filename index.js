@@ -131,87 +131,155 @@ async function downloadFromIqsaved(page, reelUrl) {
 
 async function uploadReel(page, videoPath, caption) {
   try {
-    console.log("⬆️ Uploading reel...");
+  console.log("⬆️ Uploading reel...");
 
-    if (!fs.existsSync(videoPath)) {
-      throw new Error(`❌ Video file not found at path: ${videoPath}`);
-    }
-
-    await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
-    await delay(5000);
-
-    // 1. Click Create
-    const [createBtn] = await page.$x("//div[text()='Create']");
-    if (!createBtn) throw new Error("❌ Create button not found");
-    await createBtn.click();
-    console.log("🆕 Clicked Create");
-    await delay(3000);
-
-    // 2. Use Instagram's native file input
-    const fileInput = await page.$('input[type="file"][accept*="video/"]');
-    if (!fileInput) throw new Error("❌ File input not found");
-    
-    await fileInput.uploadFile(videoPath);
-    console.log("📤 Video file attached");
-    await delay(8000);  // Wait for processing
-
-    // 3. Handle crop selector
-    await page.evaluate(() => {
-      const buttons = [...document.querySelectorAll("div[role='button']")];
-      const originalBtn = buttons.find(b => 
-        b.textContent?.toLowerCase().includes("original")
-      );
-      if (originalBtn) originalBtn.click();
-    });
-    console.log("🖼 Set to Original crop");
-    await delay(4000);
-
-    // 4. First Next button
-    const nextButtons = await page.$$('div[role="button"]');
-    for (const button of nextButtons) {
-      const text = await page.evaluate(el => el.textContent, button);
-      if (text.includes('Next')) {
-        await button.click();
-        console.log("➡️ Clicked first Next");
-        await delay(4000);
-        break;
-      }
-    }
-
-    // 5. Second Next button
-    for (const button of nextButtons) {
-      const text = await page.evaluate(el => el.textContent, button);
-      if (text.includes('Next')) {
-        await button.click();
-        console.log("➡️ Clicked second Next");
-        await delay(4000);
-        break;
-      }
-    }
-
-    // 6. Add caption
-    await page.type('div[role="textbox"]', caption, { delay: 50 });
-    console.log("📝 Caption entered");
-    await delay(2000);
-
-    // 7. Share button
-    const shareButton = await page.$x('//div[text()="Share"]');
-    if (shareButton.length > 0) {
-      await shareButton[0].click();
-      console.log("✅ Reel shared");
-      await delay(20000);  // Wait for upload completion
-      return true;
-    }
-    
-    throw new Error("❌ Share button not found");
-  } catch (err) {
-    const timestamp = Date.now();
-    const screenshotPath = `upload_error_${timestamp}.png`;
-    await page.screenshot({ path: screenshotPath });
-    console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
-    if (GITHUB_TOKEN) await uploadToGitHub(screenshotPath);
-    return false;
+  if (!fs.existsSync(videoPath)) {
+    throw new Error(`❌ Video file not found at path: ${videoPath}`);
   }
+
+  await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2" });
+  await delay(5000);
+
+  // 1. Click Create
+  const [createBtn] = await page.$x("//div[text()='Create']");
+  if (!createBtn) throw new Error("❌ Create button not found");
+  await createBtn.click();
+  console.log("🆕 Clicked Create");
+  await delay(3000);
+
+  // 2. Try using file input directly
+  let fileInput = await page.$('input[type="file"][accept*="video/"]');
+
+  if (!fileInput) {
+    console.log("⚠️ File input not found — trying fallback brute-force clicking...");
+
+    // Add fake cursor
+    await page.evaluate(() => {
+      if (document.getElementById("fake-cursor")) return;
+      const cursor = document.createElement("div");
+      cursor.id = "fake-cursor";
+      cursor.style.position = "fixed";
+      cursor.style.width = "20px";
+      cursor.style.height = "20px";
+      cursor.style.border = "2px solid red";
+      cursor.style.borderRadius = "50%";
+      cursor.style.zIndex = "9999";
+      cursor.style.pointerEvents = "none";
+      cursor.style.transition = "top 0.05s, left 0.05s";
+      document.body.appendChild(cursor);
+    });
+
+    const moveCursor = async (x, y) => {
+      await page.evaluate((x, y) => {
+        const c = document.getElementById('fake-cursor');
+        if (c) {
+          c.style.left = `${x}px`;
+          c.style.top = `${y}px`;
+        }
+      }, x, y);
+      await page.mouse.move(x, y);
+    };
+
+    const fallbackX = 595;
+    const fallbackY = 455;
+    let filePickerOpened = false;
+
+    for (let i = 1; i <= 50; i++) {
+      const x = fallbackX + Math.floor(Math.random() * 20 - 10);
+      const y = fallbackY + Math.floor(Math.random() * 20 - 10);
+
+      console.log(`🔁 Fallback click ${i} at (${x}, ${y})`);
+      await moveCursor(x, y);
+      await page.mouse.click(x, y);
+
+      await delay(2000);
+
+      const screenshotPath = `upload_attempt_${i}.png`;
+      await page.screenshot({ path: screenshotPath });
+      console.log(`📸 Screenshot saved: ${screenshotPath}`);
+      if (GITHUB_TOKEN) await uploadToGitHub(screenshotPath);
+
+      // Re-check for file input
+      fileInput = await page.$('input[type="file"][accept*="video/"]');
+      if (fileInput) {
+        const visible = await fileInput.evaluate(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        if (visible) {
+          console.log(`✅ File picker detected on attempt ${i}`);
+          filePickerOpened = true;
+          break;
+        }
+      }
+    }
+
+    if (!filePickerOpened) {
+      throw new Error("❌ Failed to open file picker after 50 fallback attempts");
+    }
+  }
+
+  // Upload file now that input is ready
+  await fileInput.uploadFile(videoPath);
+  console.log("📤 Video file attached");
+  await delay(8000);  // Wait for processing
+
+  // 3. Handle crop selector
+  await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll("div[role='button']")];
+    const originalBtn = buttons.find(b =>
+      b.textContent?.toLowerCase().includes("original")
+    );
+    if (originalBtn) originalBtn.click();
+  });
+  console.log("🖼 Set to Original crop");
+  await delay(4000);
+
+  // 4. First Next button
+  const nextButtons = await page.$$('div[role="button"]');
+  for (const button of nextButtons) {
+    const text = await page.evaluate(el => el.textContent, button);
+    if (text.includes('Next')) {
+      await button.click();
+      console.log("➡️ Clicked first Next");
+      await delay(4000);
+      break;
+    }
+  }
+
+  // 5. Second Next button
+  for (const button of nextButtons) {
+    const text = await page.evaluate(el => el.textContent, button);
+    if (text.includes('Next')) {
+      await button.click();
+      console.log("➡️ Clicked second Next");
+      await delay(4000);
+      break;
+    }
+  }
+
+  // 6. Add caption
+  await page.type('div[role="textbox"]', caption, { delay: 50 });
+  console.log("📝 Caption entered");
+  await delay(2000);
+
+  // 7. Share button
+  const shareButton = await page.$x('//div[text()="Share"]');
+  if (shareButton.length > 0) {
+    await shareButton[0].click();
+    console.log("✅ Reel shared");
+    await delay(20000);  // Wait for upload completion
+    return true;
+  }
+
+  throw new Error("❌ Share button not found");
+} catch (err) {
+  const timestamp = Date.now();
+  const screenshotPath = `upload_error_${timestamp}.png`;
+  await page.screenshot({ path: screenshotPath });
+  console.error(`❌ Upload error: ${err.message} — Screenshot saved: ${screenshotPath}`);
+  if (GITHUB_TOKEN) await uploadToGitHub(screenshotPath);
+  return false;
 }
 
 async function main() {
