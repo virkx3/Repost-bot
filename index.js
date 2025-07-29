@@ -61,7 +61,9 @@ function addWatermark(inputPath, outputPath) {
   });
 }
 
-await page.goto("https://iqsaved.com/reel/", { waitUntil: "domcontentloaded", timeout: 60000 });
+async function downloadFromIqsaved(page, reelUrl) {
+  const iqsavedUrl = "https://iqsaved.com/reel/";
+  await page.goto("https://iqsaved.com/reel/", { waitUntil: "domcontentloaded", timeout: 60000 });
 await delay(5000); // Wait for dynamic JS to render input
 
 // Use general selector
