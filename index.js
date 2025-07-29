@@ -144,11 +144,41 @@ async function uploadReel(page, videoPath, caption) {
       throw new Error("❌ Create button not found");
     }
 
-    // 2. Click "Select from computer" using XPath
+    // 2. Click "Select from computer" via fallback coordinates
     const fileChooserPromise = page.waitForFileChooser();
-    const selectBtn = await page.$x('/html/body/div[5]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[2]/div[1]/div/div/div[2]/div/button');
-    if (!selectBtn.length) throw new Error("❌ 'Select from computer' button not found");
-    await selectBtn[0].click();
+
+    // Show fake cursor for debug (optional)
+    await page.evaluate(() => {
+      if (document.getElementById("fake-cursor")) return;
+      const cursor = document.createElement("div");
+      cursor.id = "fake-cursor";
+      cursor.style.position = "fixed";
+      cursor.style.width = "20px";
+      cursor.style.height = "20px";
+      cursor.style.border = "2px solid red";
+      cursor.style.borderRadius = "50%";
+      cursor.style.zIndex = "9999";
+      cursor.style.pointerEvents = "none";
+      cursor.style.transition = "top 0.05s, left 0.05s";
+      document.body.appendChild(cursor);
+    });
+
+    const moveCursor = async (x, y) => {
+      await page.evaluate((x, y) => {
+        const c = document.getElementById('fake-cursor');
+        if (c) {
+          c.style.left = `${x}px`;
+          c.style.top = `${y}px`;
+        }
+      }, x, y);
+      await page.mouse.move(x, y);
+    };
+
+    console.log("🖱 Clicking 'Select from computer' via fallback...");
+    await moveCursor(682, 470);
+    await delay(300);
+    await page.mouse.click(682, 470);
+
     const fileChooser = await fileChooserPromise;
     await fileChooser.accept([videoPath]);
     console.log("📤 Video selected");
@@ -199,6 +229,7 @@ async function uploadReel(page, videoPath, caption) {
     await delay(20000); // let upload finish
 
     return true;
+
   } catch (err) {
     const timestamp = Date.now();
     const screenshotPath = `upload_error_${timestamp}.png`;
