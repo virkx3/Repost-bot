@@ -1,7 +1,7 @@
 # Use official Node image
 FROM node:18-bullseye
 
-# Install dependencies
+# Install dependencies with cleanup
 RUN apt-get update && \
     apt-get install -y \
     gconf-service \
@@ -45,17 +45,21 @@ RUN apt-get update && \
     xdg-utils \
     wget \
     ffmpeg \
-    fonts-dejavu \
+    fonts-dejavu-core \
     fonts-freefont-ttf \
-    --no-install-recommends
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /usr/src/app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
 
-# Install dependencies
+# Install sharp with specific vips version first
+RUN npm install --ignore-scripts sharp@^0.33.4
+
+# Install other dependencies
 RUN npm install --only=production
 
 # Copy application files
