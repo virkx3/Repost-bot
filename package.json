@@ -1,11 +1,7 @@
 {
-  "name": "instagram-reel-bot",
+  "name": "igbot",
   "version": "1.0.0",
-  "description": "Instagram reels downloader + uploader bot for Railway",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "axios": "^1.7.2",
     "puppeteer-extra": "^3.4.4",
