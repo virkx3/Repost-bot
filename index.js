@@ -321,29 +321,24 @@ async function main() {
       await page.goto(profileUrl, { waitUntil: "networkidle2" });
       await delay(5000, 2000);
 
-const scrollCount = 2 + Math.floor(Math.random() * 5); // 2–6 scrolls
-for (let i = 0; i < scrollCount; i++) {
-  await page.evaluate(() => {
-    window.scrollBy(0, window.innerHeight);
-  });
-  const wait = 1000 + Math.random() * 2000; // 1–3 sec
-  await delay(wait); // ✅ Correct usage
-  console.log(`🔽 Scrolled ${i + 1} / ${scrollCount}`);
-}
-
+      const scrollCount = 2 + Math.floor(Math.random() * 5); // 2–6 scrolls
+      for (let i = 0; i < scrollCount; i++) {
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+        await delay(1000 + Math.random() * 2000);
+        console.log(`🔽 Scrolled ${i + 1} / ${scrollCount}`);
+      }
 
       const links = await page.$$eval("a", as => as.map(a => a.href).filter(href => href.includes("/reel/")));
       if (!links.length) {
         console.log("⚠️ No reels found");
-        await delay(20000, 10000); // Random delay between 20-30 seconds
+        await delay(30000); // wait 30 sec and retry
         continue;
       }
 
-      // Filter out used reels
       const availableReels = links.filter(link => !usedReels.includes(link));
       if (!availableReels.length) {
         console.log("⚠️ All reels from this account have been used");
-        await delay(20000, 10000);
+        await delay(30000);
         continue;
       }
 
@@ -366,16 +361,26 @@ for (let i = 0; i < scrollCount; i++) {
         console.log("✅ Reel added to used list");
       }
 
-      // Random wait time between 5-10 minutes (300,000 to 600,000 ms)
-      const waitTime = 300000 + Math.floor(Math.random() * 300000);
-      console.log(`⏱️ Waiting ${Math.round(waitTime/60000)} minutes before next post...`);
+      // === NEW FIXED 3-HOUR INTERVAL LOGIC ===
+      const nextPostTime = new Date();
+      nextPostTime.setHours(nextPostTime.getHours() + 3);
+      nextPostTime.setMinutes(0, 0, 0);
+
+      if (nextPostTime.getHours() >= 22 || nextPostTime.getHours() < 9) {
+        // Skip overnight — resume at 9 AM next day
+        nextPostTime.setDate(nextPostTime.getDate() + 1);
+        nextPostTime.setHours(9, 0, 0, 0);
+      }
+
+      const now = new Date();
+      const waitTime = nextPostTime - now;
+      console.log(`⏱️ Waiting until ${nextPostTime.toLocaleTimeString()} (~${Math.round(waitTime / 60000)} minutes)...`);
       await delay(waitTime);
 
     } catch (err) {
       console.error("❌ Loop error:", err.message);
-      await delay(180000, 60000); // Random delay between 3-4 minutes on error
+      await delay(180000, 60000); // 3–4 minute delay on error
     } finally {
-      // Always clean up files after each cycle
       cleanupFiles([reelPath, watermarkedPath]);
     }
   }
