@@ -1,74 +1,38 @@
-# Use official sharp base image
-FROM lovell/sharp:latest AS base
+# Use the official Node.js image as a base
+FROM node:16-slim
 
-# Install additional dependencies
-RUN apt-get update && \
-    apt-get install -y \
-    gconf-service \
-    libasound2 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgbm1 \
-    libgcc1 \
-    libgconf-2-4 \
-    libgdk-pixbuf2.0-0 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator1 \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    wget \
-    ffmpeg \
-    fonts-dejavu-core \
-    fonts-freefont-ttf \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
-
-# Create app directory
-WORKDIR /usr/src/app
-
-# Copy package files
-COPY package*.json ./
-
-# Install Node dependencies
-RUN npm install --only=production
-
-# Copy application files
-COPY . .
-
-# Create directories
-RUN mkdir -p /usr/src/app/downloads
-
-# Set environment variables
-ENV DISPLAY=:99
-ENV TZ=Asia/Kolkata
+# Set environment variable for Chromium (for Puppeteer)
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Run the application
-CMD [ "node", "index.js" ]
+# Install dependencies (ffmpeg, fonts, and Chromium for Puppeteer)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    chromium \
+    libnss3 \
+    libgconf-2-4 \
+    libasound2 \
+    libatk1.0-0 \
+    libcups2 \
+    fonts-liberation \
+    libappindicator3-1 \
+    libx11-xcb1 \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory inside the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json (if available)
+COPY package*.json ./
+
+# Install Node.js dependencies
+RUN npm install --production
+
+# Copy the entire script to the container
+COPY . .
+
+# Expose the port (if needed for any service listening, can be left out if not)
+EXPOSE 8080
+
+# Run the script when the container starts
+CMD ["node", "your-script.js"]
