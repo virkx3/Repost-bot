@@ -9,7 +9,6 @@ const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
 const { Octokit } = require("@octokit/rest");
-const sharp = require("sharp");
 
 puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
