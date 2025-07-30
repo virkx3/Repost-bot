@@ -1,24 +1,28 @@
-# Use official Node image with Chromium dependencies
-FROM node:20-slim
+# Use official Node image
+FROM node:20-alpine
 
-# Install system dependencies for Puppeteer + ffmpeg + fonts + sharp
-RUN apt-get update && \
-    apt-get install -y wget ca-certificates fonts-dejavu \
-    ffmpeg chromium chromium-driver libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2 && \
-    rm -rf /var/lib/apt/lists/*
+# Install necessary deps for Puppeteer & ffmpeg
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    ffmpeg
 
-# Set working directory
+# Set working dir
 WORKDIR /app
 
-# Copy package files & install deps first for layer caching
-COPY package.json ./
+# Copy and install
+COPY package*.json ./
 RUN npm install
 
-# Copy the rest of your app
+# Copy all code
 COPY . .
 
-# Expose port if needed (Railway handles this by default)
-EXPOSE 8080
+# Expose port if needed (not mandatory for headless bot)
+EXPOSE 3000
 
-# Start the bot
-CMD ["npm", "start"]
+# Run your bot
+CMD ["node", "index.js"]
