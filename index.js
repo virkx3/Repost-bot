@@ -82,7 +82,7 @@ async function downloadFromIqsaved(page, reelUrl) {
     console.log("✅ Submitted reel URL");
 
     await delay(10000, 5000); // Random delay between 10-15 seconds
-    await page.evaluate(() => window.scrollBy(0, 500));
+    await page.evaluate(() => window.scrollBy(0, 1200));
 
     let downloadLinkEl;
     for (let i = 0; i < 30; i++) {
