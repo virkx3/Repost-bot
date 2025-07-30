@@ -56,9 +56,6 @@ WORKDIR /usr/src/app
 # Copy package files
 COPY package.json ./
 
-# Install sharp with specific vips version first
-RUN npm install --ignore-scripts sharp@^0.33.4
-
 # Install other dependencies
 RUN npm install --only=production
 
