@@ -168,16 +168,16 @@ async function cleanup(files) {
 
 (async () => {
   const browser = await puppeteer.launch({
-    headless: "new",
-    executablePath: isRailway ? "/usr/bin/chromium" : undefined,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--no-zygote",
-      "--single-process",
-    ],
-  });
+  headless: "new",
+  args: [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--no-zygote",
+    "--single-process",
+  ],
+});
+
 
   const page = await browser.newPage();
 
