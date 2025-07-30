@@ -49,4 +49,4 @@ COPY . .
 EXPOSE 8080
 
 # Run the script when the container starts
-CMD ["node", "your-script.js"]
+CMD ["node", "index.js"]
