@@ -82,7 +82,7 @@ async function downloadFromIqsaved(page, reelUrl) {
     console.log("✅ Submitted reel URL");
 
     await delay(10000, 5000); // Random delay between 10-15 seconds
-    await page.evaluate(() => window.scrollBy(0, 1200));
+    await page.evaluate(() => window.scrollBy(0, 1000));
 
     let downloadLinkEl;
     for (let i = 0; i < 30; i++) {
@@ -285,7 +285,7 @@ async function handleSleepTime() {
 
 async function main() {
   const browser = await puppeteer.launch({ 
-    headless: "new", 
+    headless: false, 
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--start-maximized"] 
   });
   const page = await browser.newPage();
@@ -320,6 +320,17 @@ async function main() {
       const profileUrl = `https://www.instagram.com/${username}/reels/`;
       await page.goto(profileUrl, { waitUntil: "networkidle2" });
       await delay(5000, 2000);
+
+const scrollCount = 2 + Math.floor(Math.random() * 5); // 2–6 scrolls
+for (let i = 0; i < scrollCount; i++) {
+  await page.evaluate(() => {
+    window.scrollBy(0, window.innerHeight);
+  });
+  const wait = 1000 + Math.random() * 2000; // 1–3 sec
+  await delay(wait); // ✅ Correct usage
+  console.log(`🔽 Scrolled ${i + 1} / ${scrollCount}`);
+}
+
 
       const links = await page.$$eval("a", as => as.map(a => a.href).filter(href => href.includes("/reel/")));
       if (!links.length) {
