@@ -1,28 +1,23 @@
-# Use official Node image
+# Use a modern lightweight Node base
 FROM node:20-alpine
 
-# Install necessary deps for Puppeteer & ffmpeg
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    ffmpeg
-
-# Set working dir
+# Set working directory
 WORKDIR /app
 
-# Copy and install
+# Copy both package.json and lockfile
 COPY package*.json ./
-RUN npm install
 
-# Copy all code
+# Install exactly as lockfile says (clean CI install)
+RUN npm ci --omit=dev
+
+# Copy your full codebase
 COPY . .
 
-# Expose port if needed (not mandatory for headless bot)
-EXPOSE 3000
+# If Railway needs Chromium for Puppeteer
+RUN apk add --no-cache chromium
+
+# Set environment for Puppeteer to find Chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Run your bot
 CMD ["node", "index.js"]
