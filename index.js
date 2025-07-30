@@ -8,7 +8,6 @@ const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
-const { Octokit } = require("@octokit/rest");
 
 puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -19,9 +18,6 @@ const VIDEO_DIR = "downloads";
 const USED_REELS_FILE = "used_reels.json";
 const WATERMARK = "ig/ramn_preet05";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const REPO_OWNER = "virkx3";
-const REPO_NAME = "igbot";
 
 // Enhanced delay with random variation
 const delay = (ms, variation = 0) => new Promise((res) => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
@@ -164,7 +160,7 @@ async function uploadReel(page, videoPath, caption) {
     await page.setViewport({ width: 1366, height: 900 });
     await delay(5000, 2000);
 
-    // Click Create
+    // Click Create and upload video without extra button handling
     const createBtn = await page.evaluateHandle(() => {
       const spans = Array.from(document.querySelectorAll("span"));
       return spans.find(span => span.textContent.includes("Create"));
@@ -172,17 +168,6 @@ async function uploadReel(page, videoPath, caption) {
     if (!createBtn) throw new Error("❌ Create button not found");
     await createBtn.click();
     console.log("🆕 Clicked Create");
-    await delay(2000, 1000);
-
-    // Click "Post" in the popup
-    await page.evaluate(() => {
-      const spans = Array.from(document.querySelectorAll("span"));
-      const postBtn = spans.find(span => span.textContent.trim() === "Post");
-      if (postBtn) {
-        postBtn.click();
-      }
-    });
-    console.log("✅ Brute force click for Post done.");
     await delay(2000, 1000);
 
     const fileInput = await page.$('input[type="file"]');
@@ -194,76 +179,18 @@ async function uploadReel(page, videoPath, caption) {
     console.log("📤 Video file attached");
     await delay(8000, 3000);
 
-    console.log("🔍 Trying brute force click for OK popup...");
-    await page.evaluate(() => {
-      const allButtons = Array.from(document.querySelectorAll("button"));
-      allButtons.forEach(btn => {
-        if (btn.innerText.trim().toUpperCase() === "OK") {
-          btn.click();
-        }
-      });
-    });
-    await delay(3000, 2000);
-
-    await page.waitForSelector('div[aria-label="Select crop"], svg[aria-label="Select crop"]', { visible: true });
-    await page.click('div[aria-label="Select crop"], svg[aria-label="Select crop"]');
-    console.log("✅ Clicked crop icon");
-
-    await page.evaluate(() => {
-      const spans = Array.from(document.querySelectorAll('span'));
-      const found = spans.find(el => el.innerText.trim() === 'Original');
-      if (found) {
-        found.click();
-        console.log("✅ Clicked Original by brute force");
-      }
-    });
-
-    const nextButtons = await page.$$('div[role="button"]');
-    let clickedNext = false;
-    for (const button of nextButtons) {
-      const text = await page.evaluate(el => el.textContent.trim(), button);
-      if (text === "Next") {
-        await button.click();
-        console.log("➡️ Clicked first Next");
-        clickedNext = true;
-        await delay(4000, 2000);
-        break;
-      }
-    }
-    if (!clickedNext) throw new Error("❌ First Next button not found");
-
-    const nextButtons2 = await page.$$('div[role="button"]');
-    clickedNext = false;
-    for (const button of nextButtons2) {
-      const text = await page.evaluate(el => el.textContent.trim(), button);
-      if (text === "Next") {
-        await button.click();
-        console.log("➡️ Clicked second Next");
-        clickedNext = true;
-        await delay(4000, 2000);
-        break;
-      }
-    }
-    if (!clickedNext) throw new Error("❌ Second Next button not found");
-
     await page.type('div[role="textbox"]', caption, { delay: 30 });
     console.log("📝 Caption entered");
     await delay(2000, 1000);
 
-    // Share button
-    await page.waitForSelector("div[role='button']");
-    const shareBtns = await page.$$('div[role="button"]');
-    let clicked = false;
-    for (const btn of shareBtns) {
-      const txt = await page.evaluate(el => el.innerText.trim(), btn);
-      if (txt === "Share") {
-        await btn.click();
-        console.log("✅ Clicked Share button");
-        clicked = true;
-        break;
-      }
+    // Click Share button directly without brute force searching
+    const shareBtn = await page.$("div[role='button']:contains('Share')");
+    if (shareBtn) {
+      await shareBtn.click();
+      console.log("✅ Clicked Share button");
+    } else {
+      console.log("❌ Could not find Share button!");
     }
-    if (!clicked) console.log("❌ Could not find Share button!");
 
     return true;
   } catch (err) {
@@ -285,32 +212,6 @@ async function cleanupFiles(filePaths) {
   });
 }
 
-function isSleepTime() {
-  const now = new Date();
-  const hours = now.getHours();
-  return hours >= 22 || hours < 9;
-}
-
-async function handleSleepTime() {
-  if (!isSleepTime()) return;
-
-  console.log("😴 It's sleep time (10 PM - 9 AM)");
-
-  const now = new Date();
-  const wakeTime = new Date();
-  
-  if (now.getHours() >= 22) {
-    wakeTime.setDate(wakeTime.getDate() + 1);
-  }
-  wakeTime.setHours(9, 0, 0, 0);
-
-  const msUntilWake = wakeTime - now;
-  console.log(`⏰ Sleeping until ${wakeTime.toLocaleTimeString()} (${Math.round(msUntilWake/60000)} minutes)`);
-  
-  await delay(msUntilWake);
-  console.log("⏰ Wake up! Resuming operations...");
-}
-
 async function main() {
   // Railway-specific browser configuration
   const browser = await puppeteer.launch({
@@ -327,7 +228,7 @@ async function main() {
     ],
     executablePath: isRailway ? "/usr/bin/chromium" : undefined
   });
-  
+
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114 Safari/537.36");
 
@@ -339,96 +240,44 @@ async function main() {
 
   // Load session from environment variable if on Railway
   if (isRailway && process.env.SESSION_JSON) {
-    try {
-      fs.writeFileSync("session.json", process.env.SESSION_JSON);
-      console.log("🔐 Session created from environment variable");
-    } catch (e) {
-      console.error("Error creating session file:", e);
-    }
+    await page.setCookie(JSON.parse(process.env.SESSION_JSON));
   }
 
-  if (fs.existsSync("session.json")) {
-    try {
-      const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
-      await page.setCookie(...cookies);
-      console.log("🔐 Session loaded");
-    } catch (e) {
-      console.error("Error loading session:", e);
-    }
-  } else {
-    console.log("❌ No session.json found");
-    await browser.close();
-    return;
-  }
+  // Fetch random usernames from the source
+  const usernames = await fetchUsernames();
+  const randomUsername = usernames[Math.floor(Math.random() * usernames.length)];
+  console.log(`Randomly selected username: ${randomUsername}`);
 
+  // Main loop for downloading and uploading reels
   while (true) {
-    let reelPath, watermarkedPath;
-    try {
-      await handleSleepTime();
+    const reelUrl = `https://www.instagram.com/p/${randomUsername}/`;
+    const videoPath = await downloadFromIqsaved(page, reelUrl);
+    if (videoPath) {
+      const caption = getRandomCaption();
+      const hashtags = getRandomHashtags();
+      const fullCaption = `${caption}\n\n${hashtags}`;
+      
+      // Add watermark
+      const videoWithWatermark = `${videoPath}_watermarked.mp4`;
+      await addWatermark(videoPath, videoWithWatermark);
 
-      const usernames = await fetchUsernames();
-      const username = usernames[Math.floor(Math.random() * usernames.length)];
-      console.log("🎯 Checking:", username);
-
-      const profileUrl = `https://www.instagram.com/${username}/reels/`;
-      await page.goto(profileUrl, { waitUntil: "networkidle2" });
-      await delay(5000, 2000);
-
-      const links = await page.$$eval("a", as => as.map(a => a.href).filter(href => href.includes("/reel/")));
-      if (!links.length) {
-        console.log("⚠️ No reels found");
-        await delay(20000, 10000);
-        continue;
+      // Upload to Instagram
+      const uploadSuccess = await uploadReel(page, videoWithWatermark, fullCaption);
+      if (uploadSuccess) {
+        console.log("✅ Successfully uploaded reel.");
       }
 
-      const availableReels = links.filter(link => !usedReels.includes(link));
-      if (!availableReels.length) {
-        console.log("⚠️ All reels from this account have been used");
-        await delay(20000, 10000);
-        continue;
-      }
-
-      const randomReel = availableReels[Math.floor(Math.random() * availableReels.length)];
-      console.log("🎬 Reel:", randomReel);
-
-      reelPath = await downloadFromIqsaved(page, randomReel);
-      if (!reelPath) continue;
-
-      watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
-      await addWatermark(reelPath, watermarkedPath);
-      console.log("💧 Watermark added");
-
-      const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
-      const uploaded = await uploadReel(page, watermarkedPath, caption);
-
-      if (uploaded) {
-        usedReels.push(randomReel);
-        fs.writeFileSync(USED_REELS_FILE, JSON.stringify(usedReels, null, 2));
-        console.log("✅ Reel added to used list");
-      }
-
-      const waitTime = 300000 + Math.floor(Math.random() * 300000);
-      console.log(`⏱️ Waiting ${Math.round(waitTime/60000)} minutes before next post...`);
-      await delay(waitTime);
-
-    } catch (err) {
-      console.error("❌ Loop error:", err.message);
-      await delay(180000, 60000);
-    } finally {
-      cleanupFiles([reelPath, watermarkedPath]);
+      // Cleanup downloaded files
+      await cleanupFiles([videoPath, videoWithWatermark]);
     }
+
+    await delay(30000, 15000); // Wait before running again
   }
+
+  // Close the browser after all tasks
+  await browser.close();
 }
 
-// Handle Railway shutdown signals
-process.on('SIGINT', () => {
-  console.log('🚫 Received SIGINT. Shutting down gracefully...');
-  process.exit(0);
+main().catch((err) => {
+  console.error("❌ Error in main execution:", err.message);
 });
-
-process.on('SIGTERM', () => {
-  console.log('🚫 Received SIGTERM. Shutting down gracefully...');
-  process.exit(0);
-});
-
-main().catch(err => console.error("🔥 Fatal error:", err));
