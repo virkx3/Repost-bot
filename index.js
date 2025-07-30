@@ -297,12 +297,12 @@ async function main() {
     deviceScaleFactor: 1
   });
 
-  if (fs.existsSync("session.json")) {
-    const cookies = JSON.parse(fs.readFileSync("session.json", "utf8"));
-    await page.setCookie(...cookies);
-    console.log("🔐 Session loaded");
-  } else {
-    console.log("❌ No session.json found");
+  try {
+    const { data } = await axios.get("https://raw.githubusercontent.com/virkx3/storylikegirl/refs/heads/main/session.json");
+    await page.setCookie(...data);
+    console.log("🔐 Session loaded from remote URL");
+  } catch (error) {
+    console.log("❌ Failed to load session from remote URL");
     await browser.close();
     return;
   }
