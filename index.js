@@ -74,24 +74,18 @@ function addWatermark(inputPath, outputPath) {
 async function downloadFromIqsaved(page, reelUrl) {
   try {
     console.log("📥 Navigating to iqsaved...");
-    await page.goto("https://iqsaved.com/reel/", { waitUntil: "networkidle2", timeout: 100000 });
+    await page.goto("https://iqsaved.com/reel/", { waitUntil: "networkidle2", timeout: 60000 });
 
     await page.waitForSelector('input[name="url"]', { timeout: 15000 });
     await page.type('input[name="url"]', reelUrl);
     await page.keyboard.press('Enter');
     console.log("✅ Submitted reel URL");
 
-    await delay(10000, 5000); // Random delay between 10-15 seconds
+    await page.waitForTimeout(10000);
     await page.evaluate(() => window.scrollBy(0, 1000));
 
-    let downloadLinkEl;
-    for (let i = 0; i < 30; i++) {
-      downloadLinkEl = await page.$('a[href$=".mp4"]');
-      if (downloadLinkEl) break;
-      await delay(500);
-    }
-    if (!downloadLinkEl) throw new Error("❌ Failed to find download link.");
-
+    await page.waitForXPath("//a[contains(text(), 'Download video')]", { timeout: 15000 });
+    const [downloadLinkEl] = await page.$x("//a[contains(text(), 'Download video')]");
     const downloadUrl = await page.evaluate(el => el.href, downloadLinkEl);
 
     if (!downloadUrl || !downloadUrl.includes(".mp4")) throw new Error("❌ Failed to extract valid download URL.");
