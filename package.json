@@ -1,18 +1,19 @@
 {
   "name": "ig-bot",
   "version": "1.0.0",
-  "description": "Instagram reels downloader, watermarker, and uploader bot",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-  "puppeteer-core": "^22.8.2",
-  "puppeteer-extra": "^3.3.4",
-  "puppeteer-extra-plugin-stealth": "^2.11.1",
-  "axios": "^1.6.7",
-  "fluent-ffmpeg": "^2.1.2",
-  "ffmpeg-static": "^5.1.0",
-  "sharp": "^0.32.6",
-  "@octokit/rest": "^20.0.0"
+    "puppeteer-core": "^21.3.8",
+    "puppeteer-extra": "^3.3.4",
+    "puppeteer-extra-plugin-stealth": "^2.11.1",
+    "axios": "^1.7.2",
+    "fluent-ffmpeg": "^2.1.2",
+    "ffmpeg-static": "^5.1.0",
+    "sharp": "^0.33.4",
+    "@octokit/rest": "^20.0.2"
+  }
 }
