@@ -1,19 +1,14 @@
 {
-  "name": "ig-bot",
+  "name": "igbot",
   "version": "1.0.0",
   "main": "index.js",
   "type": "commonjs",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
-    "puppeteer-core": "^22.8.2",
-    "puppeteer-extra": "^3.3.4",
+    "puppeteer-core": "^21.3.8",
+    "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.1",
-    "axios": "^1.7.2",
+    "axios": "^1.6.8",
     "fluent-ffmpeg": "^2.1.2",
-    "ffmpeg-static": "^5.1.0",
-    "sharp": "^0.33.4",
-    "@octokit/rest": "^20.0.2"
+    "ffmpeg-static": "^5.1.0"
   }
 }
