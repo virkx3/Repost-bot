@@ -81,7 +81,7 @@ async function downloadFromIqsaved(page, reelUrl) {
     await page.keyboard.press('Enter');
     console.log("✅ Submitted reel URL");
 
-    await page.waitForTimeout(10000);
+    await delay(10000);
     await page.evaluate(() => window.scrollBy(0, 1000));
 
     await page.waitForXPath("//a[contains(text(), 'Download video')]", { timeout: 15000 });
