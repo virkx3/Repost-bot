@@ -9,7 +9,7 @@
     "puppeteer": "^22.8.2",
     "puppeteer-extra": "^3.3.4",
     "puppeteer-extra-plugin-stealth": "^2.11.1",
-    "axios": "^1.6.0",
+    "axios": "^1.6.8",
     "fluent-ffmpeg": "^2.1.2",
     "ffmpeg-static": "^4.4.0",
     "fs-extra": "^11.2.0"
