@@ -1,20 +1,18 @@
-# Use official Node base image
 FROM node:20-slim
 
-# Install Chromium for puppeteer-core
-RUN apt-get update && apt-get install -y chromium
+# Install Chromium & FFmpeg
+RUN apt-get update && \
+    apt-get install -y chromium ffmpeg fonts-dejavu-core && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency files first for build cache
 COPY package*.json ./
 
-# Install exact production dependencies
 RUN npm ci --omit=dev
 
-# Copy your whole codebase
 COPY . .
 
-# Expose your bot entrypoint
-CMD ["npm", "start"]
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+CMD ["node", "index.js"]
