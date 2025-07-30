@@ -13,7 +13,6 @@
     "puppeteer": "^22.10.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "sharp": "^0.33.4",
     "@octokit/rest": "^20.0.2"
   },
   "engines": {
