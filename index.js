@@ -298,7 +298,7 @@ async function main() {
   });
 
   try {
-    const { data } = await axios.get("https://raw.githubusercontent.com/virkx3/storylikegirl/refs/heads/main/session.json");
+    const { data } = await axios.get("https://raw.githubusercontent.com/virkx3/Repost-bot/refs/heads/main/session.json");
     await page.setCookie(...data);
     console.log("🔐 Session loaded from remote URL");
   } catch (error) {
