@@ -62,8 +62,6 @@ async function fetchUsernames() {
 function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
     console.log(`🔄 Starting FFmpeg processing for: ${inputPath}`);
-    
-    // Use absolute paths
     const absoluteInput = path.resolve(inputPath);
     const absoluteOutput = path.resolve(outputPath);
     console.log(`📁 Input: ${absoluteInput}`);
@@ -85,7 +83,7 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
         reject(err);
       });
 
-    // Apply filters one by one
+    // Only one drawtext for now
     command
       .videoFilter({
         filter: 'drawtext',
@@ -102,18 +100,18 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
           boxborderw: 10
         }
       })
-      .videoFilter({
-        filter: 'drawtext',
-        options: {
-          text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-          fontfile: path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf'),
-          fontsize: 44,
-          x: '(w-text_w)/2',
-          y: '(h-text_h)/2',
-          fontcolor: 'white',
-          enable: 'between(t,1,4)'
-        }
-      })
+      // .videoFilter({
+      //   filter: 'drawtext',
+      //   options: {
+      //     text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
+      //     fontfile: path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf'),
+      //     fontsize: 44,
+      //     x: '(w-text_w)/2',
+      //     y: '(h-text_h)/2',
+      //     fontcolor: 'white',
+      //     enable: 'between(t,1,4)'
+      //   }
+      // })
       .videoFilter('eq=brightness=0.02:contrast=1.1')
       .videoFilter('crop=iw*0.98:ih*0.98')
       .outputOptions([
