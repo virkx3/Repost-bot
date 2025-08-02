@@ -1,3 +1,4 @@
+// Full updated script with caption overlay and slight transform
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fs = require("fs");
@@ -13,14 +14,9 @@ const VIDEO_DIR = "downloads";
 const USED_REELS_FILE = "used_reels.json";
 const WATERMARK = "ig/ramn_preet05";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const REPO_OWNER = "virkx3";
-const REPO_NAME = "igbot";
 
-// Enhanced delay with random variation
-const delay = (ms, variation = 0) => new Promise((res) => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
-
-if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
+const delay = (ms, variation = 0) => new Promise(res => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
+if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
 
 let usedReels = [];
 if (fs.existsSync(USED_REELS_FILE)) {
@@ -47,26 +43,111 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-function addWatermark(inputPath, outputPath) {
+function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
-      .videoFilters({
-        filter: "drawtext",
-        options: {
-          fontfile: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-          text: WATERMARK,
-          fontsize: 24,
-          fontcolor: "white",
-          x: "(w-text_w)-10",
-          y: "(h-text_h)-10",
-          box: 1,
-          boxcolor: "black@0.5",
-          boxborderw: 5,
+      .videoFilters([
+        {
+          filter: 'drawtext',
+          options: {
+            text: caption,
+            fontfile: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            fontsize: 36,
+            fontcolor: 'white',
+            x: '(w-text_w)/2',
+            y: '(h-text_h)/2',
+            enable: 'between(t,1,4)'
+          }
         },
-      })
+        {
+          filter: 'eq',
+          options: 'brightness=0.02:contrast=1.1'
+        },
+        {
+          filter: 'crop',
+          options: 'iw*0.98:ih*0.98'
+        }
+      ])
       .output(outputPath)
-      .on("end", () => resolve(outputPath))
-      .on("error", reject)
+      .on('end', () => resolve(outputPath))
+      .on('error', reject)
+      .run();
+  });
+}
+
+// Full updated script with caption overlay and slight transform
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+const fs = require("fs");
+const axios = require("axios");
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegPath = require("ffmpeg-static");
+const path = require("path");
+
+puppeteer.use(StealthPlugin());
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+const VIDEO_DIR = "downloads";
+const USED_REELS_FILE = "used_reels.json";
+const WATERMARK = "ig/ramn_preet05";
+const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
+
+const delay = (ms, variation = 0) => new Promise(res => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
+if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
+
+let usedReels = [];
+if (fs.existsSync(USED_REELS_FILE)) {
+  usedReels = JSON.parse(fs.readFileSync(USED_REELS_FILE, "utf8"));
+}
+
+function getRandomCaption() {
+  const captions = fs.readFileSync("caption.txt", "utf8").split("\n").filter(Boolean);
+  return captions[Math.floor(Math.random() * captions.length)];
+}
+
+function getRandomHashtags(count = 15) {
+  const tags = fs.readFileSync("hashtag.txt", "utf8").split("\n").filter(Boolean);
+  const selected = [];
+  while (selected.length < count && tags.length) {
+    const index = Math.floor(Math.random() * tags.length);
+    selected.push(tags.splice(index, 1)[0]);
+  }
+  return selected.join(" ");
+}
+
+async function fetchUsernames() {
+  const res = await axios.get(USERNAMES_URL);
+  return res.data.split("\n").map(u => u.trim()).filter(Boolean);
+}
+
+function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .videoFilters([
+        {
+          filter: 'drawtext',
+          options: {
+            text: caption,
+            fontfile: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            fontsize: 36,
+            fontcolor: 'white',
+            x: '(w-text_w)/2',
+            y: '(h-text_h)/2',
+            enable: 'between(t,1,4)'
+          }
+        },
+        {
+          filter: 'eq',
+          options: 'brightness=0.02:contrast=1.1'
+        },
+        {
+          filter: 'crop',
+          options: 'iw*0.98:ih*0.98'
+        }
+      ])
+      .output(outputPath)
+      .on('end', () => resolve(outputPath))
+      .on('error', reject)
       .run();
   });
 }
@@ -252,36 +333,23 @@ async function cleanupFiles(filePaths) {
   });
 }
 
-// ===== NEW: SLEEP TIME FUNCTIONS =====
 function isSleepTime() {
   const now = new Date();
   const hours = now.getHours();
-  // Sleep between 10 PM (22) and 9 AM (9)
   return hours >= 22 || hours < 9;
 }
 
 async function handleSleepTime() {
   if (!isSleepTime()) return;
-
-  console.log("😴 It's sleep time (10 PM - 9 AM)");
-
-  // Calculate wake up time (9 AM next day)
   const now = new Date();
   const wakeTime = new Date();
-  
-  if (now.getHours() >= 22) {
-    // Already past 10 PM, sleep until 9 AM next day
-    wakeTime.setDate(wakeTime.getDate() + 1);
-  }
-  wakeTime.setHours(9, 0, 0, 0); // Set to 9 AM
-
+  if (now.getHours() >= 22) wakeTime.setDate(wakeTime.getDate() + 1);
+  wakeTime.setHours(9, 0, 0, 0);
   const msUntilWake = wakeTime - now;
   console.log(`⏰ Sleeping until ${wakeTime.toLocaleTimeString()} (${Math.round(msUntilWake/60000)} minutes)`);
-  
   await delay(msUntilWake);
   console.log("⏰ Wake up! Resuming operations...");
 }
-// ===== END SLEEP TIME FUNCTIONS =====
 
 async function main() {
   const browser = await puppeteer.launch({ 
@@ -290,12 +358,7 @@ async function main() {
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
-
-  await page.setViewport({
-    width: 1366,
-    height: 900,
-    deviceScaleFactor: 1
-  });
+  await page.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 });
 
   try {
     const { data } = await axios.get("https://raw.githubusercontent.com/virkx3/Repost-bot/refs/heads/main/session.json");
@@ -308,70 +371,52 @@ async function main() {
   }
 
   while (true) {
-    let reelPath, watermarkedPath;
+    let reelPath, finalPath;
     try {
-      // NEW: Check sleep time before each cycle
       await handleSleepTime();
-
       const usernames = await fetchUsernames();
       const username = usernames[Math.floor(Math.random() * usernames.length)];
-      console.log("🎯 Checking:", username);
-
       const profileUrl = `https://www.instagram.com/${username}/reels/`;
+
       await page.goto(profileUrl, { waitUntil: "networkidle2" });
       await delay(5000, 2000);
 
-      const scrollCount = 2 + Math.floor(Math.random() * 5); // 2–6 scrolls
+      const scrollCount = 2 + Math.floor(Math.random() * 5);
       for (let i = 0; i < scrollCount; i++) {
         await page.evaluate(() => window.scrollBy(0, window.innerHeight));
         await delay(1000 + Math.random() * 2000);
-        console.log(`🔽 Scrolled ${i + 1} / ${scrollCount}`);
       }
 
       const links = await page.$$eval("a", as => as.map(a => a.href).filter(href => href.includes("/reel/")));
-      if (!links.length) {
-        console.log("⚠️ No reels found");
-        await delay(30000); // wait 30 sec and retry
-        continue;
-      }
-
       const availableReels = links.filter(link => !usedReels.includes(link));
       if (!availableReels.length) {
-        console.log("⚠️ All reels from this account have been used");
         await delay(30000);
         continue;
       }
 
       const randomReel = availableReels[Math.floor(Math.random() * availableReels.length)];
-      console.log("🎬 Reel:", randomReel);
-
       reelPath = await downloadFromIqsaved(page, randomReel);
       if (!reelPath) continue;
 
-      watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
-      await addWatermark(reelPath, watermarkedPath);
-      console.log("💧 Watermark added");
+      const captionText = getRandomCaption();
+      const finalCaption = `${captionText}\n\nCredit @${username}\n${getRandomHashtags()}`;
 
-      const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
-      const uploaded = await uploadReel(page, watermarkedPath, caption);
+      finalPath = reelPath.replace(".mp4", "_final.mp4");
+      await addCaptionOverlayAndTransform(reelPath, finalPath, captionText);
 
+      const uploaded = await uploadReel(page, finalPath, finalCaption);
       if (uploaded) {
         usedReels.push(randomReel);
         fs.writeFileSync(USED_REELS_FILE, JSON.stringify(usedReels, null, 2));
-        console.log("✅ Reel added to used list");
       }
 
-      // === NEW FIXED 3-HOUR INTERVAL LOGIC ===
       const nextPostTime = new Date();
       nextPostTime.setHours(nextPostTime.getHours() + 3);
       nextPostTime.setMinutes(0, 0, 0);
-
       if (nextPostTime.getHours() >= 22 || nextPostTime.getHours() < 9) {
-        // Skip overnight — resume at 9 AM next day
         nextPostTime.setDate(nextPostTime.getDate() + 1);
         nextPostTime.setHours(9, 0, 0, 0);
       }
-
       const now = new Date();
       const waitTime = nextPostTime - now;
       console.log(`⏱️ Waiting until ${nextPostTime.toLocaleTimeString()} (~${Math.round(waitTime / 60000)} minutes)...`);
@@ -379,9 +424,123 @@ async function main() {
 
     } catch (err) {
       console.error("❌ Loop error:", err.message);
-      await delay(180000, 60000); // 3–4 minute delay on error
+      await delay(180000, 60000);
     } finally {
-      cleanupFiles([reelPath, watermarkedPath]);
+      cleanupFiles([reelPath, finalPath]);
+    }
+  }
+}
+
+main();
+
+
+async function cleanupFiles(filePaths) {
+  filePaths.forEach(filePath => {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`🧹 Deleted file: ${path.basename(filePath)}`);
+      } catch (err) {
+        console.error(`❌ Error deleting file ${filePath}:`, err.message);
+      }
+    }
+  });
+}
+
+function isSleepTime() {
+  const now = new Date();
+  const hours = now.getHours();
+  return hours >= 22 || hours < 9;
+}
+
+async function handleSleepTime() {
+  if (!isSleepTime()) return;
+  const now = new Date();
+  const wakeTime = new Date();
+  if (now.getHours() >= 22) wakeTime.setDate(wakeTime.getDate() + 1);
+  wakeTime.setHours(9, 0, 0, 0);
+  const msUntilWake = wakeTime - now;
+  console.log(`⏰ Sleeping until ${wakeTime.toLocaleTimeString()} (${Math.round(msUntilWake/60000)} minutes)`);
+  await delay(msUntilWake);
+  console.log("⏰ Wake up! Resuming operations...");
+}
+
+async function main() {
+  const browser = await puppeteer.launch({ 
+    headless: "new", 
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--start-maximized"] 
+  });
+  const page = await browser.newPage();
+  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
+  await page.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 });
+
+  try {
+    const { data } = await axios.get("https://raw.githubusercontent.com/virkx3/Repost-bot/refs/heads/main/session.json");
+    await page.setCookie(...data);
+    console.log("🔐 Session loaded from remote URL");
+  } catch (error) {
+    console.log("❌ Failed to load session from remote URL");
+    await browser.close();
+    return;
+  }
+
+  while (true) {
+    let reelPath, finalPath;
+    try {
+      await handleSleepTime();
+      const usernames = await fetchUsernames();
+      const username = usernames[Math.floor(Math.random() * usernames.length)];
+      const profileUrl = `https://www.instagram.com/${username}/reels/`;
+
+      await page.goto(profileUrl, { waitUntil: "networkidle2" });
+      await delay(5000, 2000);
+
+      const scrollCount = 2 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < scrollCount; i++) {
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+        await delay(1000 + Math.random() * 2000);
+      }
+
+      const links = await page.$$eval("a", as => as.map(a => a.href).filter(href => href.includes("/reel/")));
+      const availableReels = links.filter(link => !usedReels.includes(link));
+      if (!availableReels.length) {
+        await delay(30000);
+        continue;
+      }
+
+      const randomReel = availableReels[Math.floor(Math.random() * availableReels.length)];
+      reelPath = await downloadFromIqsaved(page, randomReel);
+      if (!reelPath) continue;
+
+      const captionText = getRandomCaption();
+      const finalCaption = `${captionText}\n\nCredit @${username}\n${getRandomHashtags()}`;
+
+      finalPath = reelPath.replace(".mp4", "_final.mp4");
+      await addCaptionOverlayAndTransform(reelPath, finalPath, captionText);
+
+      const uploaded = await uploadReel(page, finalPath, finalCaption);
+      if (uploaded) {
+        usedReels.push(randomReel);
+        fs.writeFileSync(USED_REELS_FILE, JSON.stringify(usedReels, null, 2));
+      }
+
+      const nextPostTime = new Date();
+      nextPostTime.setHours(nextPostTime.getHours() + 3);
+      nextPostTime.setMinutes(0, 0, 0);
+      if (nextPostTime.getHours() >= 22 || nextPostTime.getHours() < 9) {
+        nextPostTime.setDate(nextPostTime.getDate() + 1);
+        nextPostTime.setHours(9, 0, 0, 0);
+      }
+      const now = new Date();
+      const waitTime = nextPostTime - now;
+      console.log(`⏱️ Waiting until ${nextPostTime.toLocaleTimeString()} (~${Math.round(waitTime / 60000)} minutes)...`);
+      await delay(waitTime);
+
+    } catch (err) {
+      console.error("❌ Loop error:", err.message);
+      await delay(180000, 60000);
+    } finally {
+      cleanupFiles([reelPath, finalPath]);
     }
   }
 }
