@@ -6,12 +6,25 @@ const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath("/usr/local/bin/ffmpeg");
 
+
 puppeteer.use(StealthPlugin());
 
 const VIDEO_DIR = "downloads";
 const USED_REELS_FILE = "used_reels.json";
 const WATERMARK = "ig/ramn_preet05";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
+
+const fontPaths = [
+  path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf'),
+  path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf')
+];
+
+fontPaths.forEach(fontPath => {
+  if (!fs.existsSync(fontPath)) {
+    console.error(`❌ Critical Error: Missing font file at ${fontPath}`);
+    console.error("💡 Solution: Make sure your fonts directory is included in your repository");
+    process.exit(1);
+  }
 
 const delay = (ms, variation = 0) => new Promise(res => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
 if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
@@ -48,44 +61,44 @@ async function fetchUsernames() {
 
 function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .videoFilters([
-  {
-    filter: 'drawtext',
-    options: {
-      text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-      fontfile: 'fonts/BebasNeue-Regular.ttf',
-      fontcolor: 'white',
-      fontsize: 44,
-      x: '(w-text_w)/2',
-      y: '(h-text_h)/2',
-      enable: 'between(t,1,4)',
-      box: 1,
-      boxcolor: 'black@0.6',
-      boxborderw: 10
-    }
-  },
-  {
-    filter: 'drawtext',
-    options: {
-      text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-      fontfile: 'fonts/NotoColorEmoji.ttf',
-      fontsize: 44,
-      x: '(w-text_w)/2',
-      y: '(h-text_h)/2',
-      fontcolor: 'white',
-      enable: 'between(t,1,4)'
-    }
-  },
-  { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
-  { filter: 'crop', options: 'iw*0.98:ih*0.98' }
-])
+    const command = ffmpeg(inputPath)
+      .videoFilter({
+        filter: 'drawtext',
+        options: {
+          text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
+          fontfile: path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf'),
+          fontcolor: 'white',
+          fontsize: 44,
+          x: '(w-text_w)/2',
+          y: '(h-text_h)/2',
+          enable: 'between(t,1,4)',
+          box: 1,
+          boxcolor: 'black@0.6',
+          boxborderw: 10
+        }
+      })
+      .videoFilter({
+        filter: 'drawtext',
+        options: {
+          text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
+          fontfile: path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf'),
+          fontsize: 44,
+          x: '(w-text_w)/2',
+          y: '(h-text_h)/2',
+          fontcolor: 'white',
+          enable: 'between(t,1,4)'
+        }
+      })
+      .videoFilter('eq=brightness=0.02:contrast=1.1')
+      .videoFilter('crop=iw*0.98:ih*0.98')
       .outputOptions([
         '-preset veryfast',
         '-threads 2',
         '-max_muxing_queue_size 1024'
       ])
-      .output(outputPath)
+      .output(outputPath);
+
+    command
       .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
       .on('stderr', line => console.log('📝 FFmpeg log:', line))
       .on('end', () => resolve(outputPath))
