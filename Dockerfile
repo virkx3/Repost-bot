@@ -1,18 +1,67 @@
 FROM node:18
 
-# Install FFmpeg and required libraries for fonts
+# Set timezone and install dependencies
+ENV TZ=Asia/Kolkata
 RUN apt-get update && \
     apt-get install -y \
     ffmpeg \
     libfreetype6 \
     libfontconfig1 \
-    && apt-get clean
+    fonts-noto-color-emoji \
+    # Puppeteer dependencies
+    gconf-service \
+    libgbm-dev \
+    libasound2 \
+    libatk1.0-0 \
+    libc6 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libexpat1 \
+    libfontconfig1 \
+    libgcc1 \
+    libgconf-2-4 \
+    libgdk-pixbuf2.0-0 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libstdc++6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    ca-certificates \
+    fonts-liberation \
+    libappindicator1 \
+    libnss3 \
+    lsb-release \
+    xdg-utils \
+    wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
+# Set working directory
 WORKDIR /app
 
+# Copy package.json first for better caching
 COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
+# Copy all files
 COPY . .
 
+# Start the bot
 CMD ["node", "index.js"]
