@@ -28,6 +28,11 @@ function getRandomCaption() {
   return captions[Math.floor(Math.random() * captions.length)];
 }
 
+function getRandomOverlay() {
+  const lines = fs.readFileSync("overlay.txt", "utf8").split("\n").filter(Boolean);
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
 function getRandomHashtags(count = 15) {
   const tags = fs.readFileSync("hashtag.txt", "utf8").split("\n").filter(Boolean);
   const selected = [];
@@ -43,8 +48,8 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
-  const hasEmoji = /[\p{Emoji}]/u.test(caption);
+function addCaptionOverlayAndTransform(inputPath, outputPath, overlayText) {
+  const hasEmoji = /[\p{Emoji}]/u.test(overlayText);
 
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
@@ -52,7 +57,7 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
         {
           filter: 'drawtext',
           options: {
-            text: caption.replace(/:/g, '\\:'),
+            text: overlayText.replace(/:/g, '\\:'),
             fontfile: hasEmoji ? 'fonts/NotoColorEmoji.ttf' : 'fonts/BebasNeue-Regular.ttf',
             fontcolor: 'white',
             fontsize: 44,
