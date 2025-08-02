@@ -49,17 +49,14 @@ async function fetchUsernames() {
 }
 
 function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
-  // Escape colons for FFmpeg
-  const safeText = caption.replace(/:/g, '\\:');
-
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .videoFilters([
-        // Main visible caption (English + style)
+        // Main text with stroke
         {
           filter: 'drawtext',
           options: {
-            text: safeText,
+            text: caption.replace(/:/g, '\\:'),
             fontfile: 'fonts/BebasNeue-Regular.ttf',
             fontcolor: 'white',
             fontsize: 44,
@@ -67,23 +64,22 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
             y: '(h-text_h)/2',
             enable: 'between(t,1,4)',
             borderw: 2,
-            bordercolor: 'black'
+            bordercolor: 'black',
           }
         },
-        // Emoji layer (if present in text)
+        // Emoji fallback
         {
           filter: 'drawtext',
           options: {
-            text: safeText,
+            text: caption.replace(/:/g, '\\:'),
             fontfile: 'fonts/NotoColorEmoji.ttf',
             fontsize: 44,
             x: '(w-text_w)/2',
             y: '(h-text_h)/2',
+            fontcolor: 'white',
             enable: 'between(t,1,4)',
-            alpha: 'if(gte(t,1)*lte(t,4),1,0)'
           }
         },
-        // Slight transformation
         { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
         { filter: 'crop', options: 'iw*0.98:ih*0.98' }
       ])
@@ -93,15 +89,11 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
         '-max_muxing_queue_size 1024'
       ])
       .output(outputPath)
-      .on('start', commandLine => {
-        console.log("⚙️ FFmpeg command:", commandLine);
-      })
-      .on('stderr', stderrLine => {
-        console.log("📝 FFmpeg log:", stderrLine);
-      })
+      .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
+      .on('stderr', line => console.log('📝 FFmpeg log:', line))
       .on('end', () => resolve(outputPath))
       .on('error', err => {
-        console.error("❌ FFmpeg error:", err.message);
+        console.error('❌ FFmpeg error:', err.message);
         reject(err);
       })
       .run();
