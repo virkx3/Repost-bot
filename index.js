@@ -4,7 +4,6 @@ const fs = require("fs");
 const axios = require("axios");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
-// Remove: ffmpeg.setFfmpegPath("/usr/local/bin/ffmpeg");
 
 puppeteer.use(StealthPlugin());
 
@@ -25,13 +24,10 @@ fontPaths.forEach(fontPath => {
     console.error("💡 Solution: Make sure your fonts directory is included in your repository");
     process.exit(1);
   }
-}); // Fixed: close the forEach callback and the forEach.
+});
 
-// Now define delay function and the rest
 const delay = (ms, variation = 0) => new Promise(res => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
 if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
-
-// ... rest of the code
 
 let usedReels = [];
 if (fs.existsSync(USED_REELS_FILE)) {
