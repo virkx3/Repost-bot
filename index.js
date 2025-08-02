@@ -50,37 +50,36 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .videoFilters([
-        // Main text with stroke
-        {
-          filter: 'drawtext',
-          options: {
-            text: caption.replace(/:/g, '\\:'),
-            fontfile: 'fonts/BebasNeue-Regular.ttf',
-            fontcolor: 'white',
-            fontsize: 44,
-            x: '(w-text_w)/2',
-            y: '(h-text_h)/2',
-            enable: 'between(t,1,4)',
-            borderw: 2,
-            bordercolor: 'black',
-          }
-        },
-        // Emoji fallback
-        {
-          filter: 'drawtext',
-          options: {
-            text: caption.replace(/:/g, '\\:'),
-            fontfile: 'fonts/NotoColorEmoji.ttf',
-            fontsize: 44,
-            x: '(w-text_w)/2',
-            y: '(h-text_h)/2',
-            fontcolor: 'white',
-            enable: 'between(t,1,4)',
-          }
-        },
-        { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
-        { filter: 'crop', options: 'iw*0.98:ih*0.98' }
-      ])
+  {
+    filter: 'drawtext',
+    options: {
+      text: caption.replace(/:/g, '\\:'),
+      fontfile: 'fonts/BebasNeue-Regular.ttf',
+      fontcolor: 'white',
+      fontsize: 44,
+      x: '(w-text_w)/2',
+      y: '(h-text_h)/2',
+      enable: 'between(t,1,4)',
+      box: 1,
+      boxcolor: 'black@0.6',
+      boxborderw: 10
+    }
+  },
+  {
+    filter: 'drawtext',
+    options: {
+      text: caption.replace(/:/g, '\\:'),
+      fontfile: 'fonts/NotoColorEmoji.ttf',
+      fontsize: 44,
+      x: '(w-text_w)/2',
+      y: '(h-text_h)/2',
+      fontcolor: 'white',
+      enable: 'between(t,1,4)'
+    }
+  },
+  { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
+  { filter: 'crop', options: 'iw*0.98:ih*0.98' }
+])
       .outputOptions([
         '-preset veryfast',
         '-threads 2',
