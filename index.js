@@ -48,25 +48,42 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-function addCaptionOverlayAndTransform(inputPath, outputPath, overlayText) {
-  const hasEmoji = /[\p{Emoji}]/u.test(overlayText);
+function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
+  // Escape colons for FFmpeg
+  const safeText = caption.replace(/:/g, '\\:');
 
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .videoFilters([
+        // Main visible caption (English + style)
         {
           filter: 'drawtext',
           options: {
-            text: overlayText.replace(/:/g, '\\:'),
-            fontfile: hasEmoji ? 'fonts/NotoColorEmoji.ttf' : 'fonts/BebasNeue-Regular.ttf',
+            text: safeText,
+            fontfile: 'fonts/BebasNeue-Regular.ttf',
             fontcolor: 'white',
             fontsize: 44,
             x: '(w-text_w)/2',
             y: '(h-text_h)/2',
             enable: 'between(t,1,4)',
-            ...(hasEmoji ? {} : { borderw: 2, bordercolor: 'black' })
+            borderw: 2,
+            bordercolor: 'black'
           }
         },
+        // Emoji layer (if present in text)
+        {
+          filter: 'drawtext',
+          options: {
+            text: safeText,
+            fontfile: 'fonts/NotoColorEmoji.ttf',
+            fontsize: 44,
+            x: '(w-text_w)/2',
+            y: '(h-text_h)/2',
+            enable: 'between(t,1,4)',
+            alpha: 'if(gte(t,1)*lte(t,4),1,0)'
+          }
+        },
+        // Slight transformation
         { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
         { filter: 'crop', options: 'iw*0.98:ih*0.98' }
       ])
@@ -77,10 +94,10 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, overlayText) {
       ])
       .output(outputPath)
       .on('start', commandLine => {
-        console.log("FFmpeg command:", commandLine);
+        console.log("⚙️ FFmpeg command:", commandLine);
       })
       .on('stderr', stderrLine => {
-        console.log("FFmpeg stderr:", stderrLine);
+        console.log("📝 FFmpeg log:", stderrLine);
       })
       .on('end', () => resolve(outputPath))
       .on('error', err => {
