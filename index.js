@@ -5,6 +5,8 @@ const fs = require("fs");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
+const ffmpeg = require('fluent-ffmpeg');
+ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
 const path = require("path");
 
 puppeteer.use(StealthPlugin());
