@@ -88,7 +88,7 @@ function addWatermark(inputPath, outputPath) {
   {
     filter: "drawtext",
     options: {
-      fontfile: path.resolve(__dirname, "fonts/NotoSans-Regular.ttf),
+      fontfile: path.resolve(__dirname, "fonts/NotoSans-Regular.ttf"),
       text: overlayText,
       fontsize: 36,
       fontcolor: "white",
