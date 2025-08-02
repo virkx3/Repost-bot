@@ -2,32 +2,25 @@ const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fs = require("fs");
 const axios = require("axios");
-const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
+const ffmpegPath = require("ffmpeg-static");
+const path = require("path");
 
 puppeteer.use(StealthPlugin());
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const VIDEO_DIR = "downloads";
 const USED_REELS_FILE = "used_reels.json";
 const WATERMARK = "ig/ramn_preet05";
 const USERNAMES_URL = "https://raw.githubusercontent.com/virkx3/otp/refs/heads/main/usernames.txt";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const REPO_OWNER = "virkx3";
+const REPO_NAME = "igbot";
 
-const fontPaths = [
-  path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf'),
-  path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf')
-];
+// Enhanced delay with random variation
+const delay = (ms, variation = 0) => new Promise((res) => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
 
-// Verify fonts exist
-fontPaths.forEach(fontPath => {
-  if (!fs.existsSync(fontPath)) {
-    console.error(`❌ Critical Error: Missing font file at ${fontPath}`);
-    console.error("💡 Solution: Make sure your fonts directory is included in your repository");
-    process.exit(1);
-  }
-});
-
-const delay = (ms, variation = 0) => new Promise(res => setTimeout(res, ms + (variation ? Math.floor(Math.random() * variation) : 0)));
-if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR);
+if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
 
 let usedReels = [];
 if (fs.existsSync(USED_REELS_FILE)) {
@@ -37,11 +30,6 @@ if (fs.existsSync(USED_REELS_FILE)) {
 function getRandomCaption() {
   const captions = fs.readFileSync("caption.txt", "utf8").split("\n").filter(Boolean);
   return captions[Math.floor(Math.random() * captions.length)];
-}
-
-function getRandomOverlay() {
-  const lines = fs.readFileSync("overlay.txt", "utf8").split("\n").filter(Boolean);
-  return lines[Math.floor(Math.random() * lines.length)];
 }
 
 function getRandomHashtags(count = 15) {
@@ -59,69 +47,50 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
-  return new Promise((resolve, reject) => {
-    console.log(`🔄 Starting FFmpeg processing for: ${inputPath}`);
-    
-    // Use system fallback fonts
-    const primaryFont = fs.existsSync(path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf')) 
-      ? path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf')
-      : '/usr/share/fonts/truetype/freefont/FreeSans.ttf';
-      
-    const emojiFont = fs.existsSync(path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf')) 
-      ? path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf')
-      : '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf';
+function getRandomOverlayText() {
+  const overlays = fs.readFileSync("overlay.txt", "utf8").split("\n").filter(Boolean);
+  return overlays[Math.floor(Math.random() * overlays.length)];
+}
 
-    const command = ffmpeg(inputPath)
-      .videoFilter({
-        filter: 'drawtext',
-        options: {
-          text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-          fontfile: primaryFont,
-          fontcolor: 'white',
-          fontsize: 36, // Reduced from 44
-          x: '(w-text_w)/2',
-          y: '(h-text_h)/2',
-          enable: 'between(t,1,4)',
-          box: 1,
-          boxcolor: 'black@0.6',
-          boxborderw: 8
+function addWatermark(inputPath, outputPath) {
+  const overlayText = getRandomOverlayText();
+
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .videoFilters([
+        // Persistent bottom-right watermark
+        {
+          filter: "drawtext",
+          options: {
+            fontfile: path.resolve(__dirname, "fonts/SF_Cartoonist_Hand_Bold.ttf"),
+            text: WATERMARK,
+            fontsize: 24,
+            fontcolor: "black",
+            x: "(w-text_w)-10",
+            y: "(h-text_h)-10",
+            box: 1,
+            boxcolor: "white@1.0",
+            boxborderw: 5
+          }
+        },
+        // Center overlay (2–3 seconds only) with emoji support, no background
+        {
+          filter: "drawtext",
+          options: {
+            fontfile: path.resolve(__dirname, "fonts/NotoColorEmoji.ttf"),
+            text: overlayText,
+            fontsize: 36,
+            fontcolor: "white",
+            x: "(w-text_w)/2",
+            y: "(h-text_h)/2",
+            enable: "between(t,1,4)"
+          }
         }
-      })
-      .videoFilter({
-        filter: 'drawtext',
-        options: {
-          text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-          fontfile: emojiFont,
-          fontsize: 36, // Reduced from 44
-          x: '(w-text_w)/2',
-          y: '(h-text_h)/2',
-          fontcolor: 'white',
-          enable: 'between(t,1,4)'
-        }
-      })
-      .videoFilter('eq=brightness=0.02:contrast=1.1')
-      .videoFilter('crop=iw*0.98:ih*0.98')
-      .outputOptions([
-        '-preset veryfast',
-        '-threads 2',
-        '-max_muxing_queue_size 1024'
       ])
       .output(outputPath)
-      .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
-      .on('end', () => {
-        console.log('✅ FFmpeg finished successfully');
-        resolve(outputPath);
-      })
-      .on('error', (err, stdout, stderr) => {
-        console.error('❌ FFmpeg error:', err.message);
-        console.error('❌ FFmpeg stdout:', stdout);
-        console.error('❌ FFmpeg stderr:', stderr);
-        reject(err);
-      })
-      .on('stderr', line => console.log('📝 FFmpeg log:', line));
-
-    command.run();
+      .on("end", () => resolve(outputPath))
+      .on("error", reject)
+      .run();
   });
 }
 
@@ -306,38 +275,50 @@ async function cleanupFiles(filePaths) {
   });
 }
 
+// ===== NEW: SLEEP TIME FUNCTIONS =====
 function isSleepTime() {
   const now = new Date();
   const hours = now.getHours();
+  // Sleep between 10 PM (22) and 9 AM (9)
   return hours >= 22 || hours < 9;
 }
 
 async function handleSleepTime() {
   if (!isSleepTime()) return;
+
+  console.log("😴 It's sleep time (10 PM - 9 AM)");
+
+  // Calculate wake up time (9 AM next day)
   const now = new Date();
   const wakeTime = new Date();
-  if (now.getHours() >= 22) wakeTime.setDate(wakeTime.getDate() + 1);
-  wakeTime.setHours(9, 0, 0, 0);
+  
+  if (now.getHours() >= 22) {
+    // Already past 10 PM, sleep until 9 AM next day
+    wakeTime.setDate(wakeTime.getDate() + 1);
+  }
+  wakeTime.setHours(9, 0, 0, 0); // Set to 9 AM
+
   const msUntilWake = wakeTime - now;
   console.log(`⏰ Sleeping until ${wakeTime.toLocaleTimeString()} (${Math.round(msUntilWake/60000)} minutes)`);
+  
   await delay(msUntilWake);
   console.log("⏰ Wake up! Resuming operations...");
 }
+// ===== END SLEEP TIME FUNCTIONS =====
 
 async function main() {
   const browser = await puppeteer.launch({ 
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
     headless: "new", 
-    args: [
-      "--no-sandbox", 
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu"
-    ] 
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--start-maximized"] 
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36");
-  await page.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 });
+
+  await page.setViewport({
+    width: 1366,
+    height: 900,
+    deviceScaleFactor: 1
+  });
 
   try {
     const { data } = await axios.get("https://raw.githubusercontent.com/virkx3/Repost-bot/refs/heads/main/session.json");
@@ -350,53 +331,70 @@ async function main() {
   }
 
   while (true) {
-    let reelPath, finalPath;
+    let reelPath, watermarkedPath;
     try {
+      // NEW: Check sleep time before each cycle
       await handleSleepTime();
+
       const usernames = await fetchUsernames();
       const username = usernames[Math.floor(Math.random() * usernames.length)];
-      const profileUrl = `https://www.instagram.com/${username}/reels/`;
+      console.log("🎯 Checking:", username);
 
+      const profileUrl = `https://www.instagram.com/${username}/reels/`;
       await page.goto(profileUrl, { waitUntil: "networkidle2" });
       await delay(5000, 2000);
 
-      const scrollCount = 2 + Math.floor(Math.random() * 5);
+      const scrollCount = 2 + Math.floor(Math.random() * 5); // 2–6 scrolls
       for (let i = 0; i < scrollCount; i++) {
         await page.evaluate(() => window.scrollBy(0, window.innerHeight));
         await delay(1000 + Math.random() * 2000);
+        console.log(`🔽 Scrolled ${i + 1} / ${scrollCount}`);
       }
 
       const links = await page.$$eval("a", as => as.map(a => a.href).filter(href => href.includes("/reel/")));
+      if (!links.length) {
+        console.log("⚠️ No reels found");
+        await delay(30000); // wait 30 sec and retry
+        continue;
+      }
+
       const availableReels = links.filter(link => !usedReels.includes(link));
       if (!availableReels.length) {
+        console.log("⚠️ All reels from this account have been used");
         await delay(30000);
         continue;
       }
 
       const randomReel = availableReels[Math.floor(Math.random() * availableReels.length)];
+      console.log("🎬 Reel:", randomReel);
+
       reelPath = await downloadFromIqsaved(page, randomReel);
       if (!reelPath) continue;
 
-      const overlayText = getRandomOverlay();  // From overlay.txt
-      const captionText = getRandomCaption();  // For Instagram caption
-      const finalCaption = `${captionText}\n\nCredit @${username}\n${getRandomHashtags()}`;
+      watermarkedPath = reelPath.replace(".mp4", "_wm.mp4");
+      await addWatermark(reelPath, watermarkedPath);
+      console.log("💧 Watermark added");
 
-      finalPath = reelPath.replace(".mp4", "_final.mp4");
-      await addCaptionOverlayAndTransform(reelPath, finalPath, captionText);
+      const caption = `${getRandomCaption()}\n\n${getRandomHashtags()}`;
+      const uploaded = await uploadReel(page, watermarkedPath, caption);
 
-      const uploaded = await uploadReel(page, finalPath, finalCaption);
       if (uploaded) {
         usedReels.push(randomReel);
         fs.writeFileSync(USED_REELS_FILE, JSON.stringify(usedReels, null, 2));
+        console.log("✅ Reel added to used list");
       }
 
+      // === NEW FIXED 3-HOUR INTERVAL LOGIC ===
       const nextPostTime = new Date();
       nextPostTime.setHours(nextPostTime.getHours() + 3);
       nextPostTime.setMinutes(0, 0, 0);
+
       if (nextPostTime.getHours() >= 22 || nextPostTime.getHours() < 9) {
+        // Skip overnight — resume at 9 AM next day
         nextPostTime.setDate(nextPostTime.getDate() + 1);
         nextPostTime.setHours(9, 0, 0, 0);
       }
+
       const now = new Date();
       const waitTime = nextPostTime - now;
       console.log(`⏱️ Waiting until ${nextPostTime.toLocaleTimeString()} (~${Math.round(waitTime / 60000)} minutes)...`);
@@ -404,9 +402,9 @@ async function main() {
 
     } catch (err) {
       console.error("❌ Loop error:", err.message);
-      await delay(180000, 60000);
+      await delay(180000, 60000); // 3–4 minute delay on error
     } finally {
-      cleanupFiles([reelPath, finalPath]);
+      cleanupFiles([reelPath, watermarkedPath]);
     }
   }
 }
