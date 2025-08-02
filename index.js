@@ -69,8 +69,17 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
         '-max_muxing_queue_size 1024'
       ])
       .output(outputPath)
+      .on('start', commandLine => {
+        console.log("FFmpeg command:", commandLine); // ✅ log command
+      })
+      .on('stderr', stderrLine => {
+        console.log("FFmpeg stderr:", stderrLine); // ✅ log FFmpeg error
+      })
       .on('end', () => resolve(outputPath))
-      .on('error', reject)
+      .on('error', err => {
+        console.error("❌ FFmpeg error:", err.message);
+        reject(err);
+      })
       .run();
   });
 }
