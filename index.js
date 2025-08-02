@@ -43,9 +43,8 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-function addCaptionOverlayAndTransform(inputPath, outputPath) {
-  const captions = fs.readFileSync("overlay.txt", "utf8").split("\n").filter(Boolean);
-  const caption = captions[Math.floor(Math.random() * captions.length)];
+function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
+  const hasEmoji = /[\p{Emoji}]/u.test(caption);
 
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
@@ -54,12 +53,13 @@ function addCaptionOverlayAndTransform(inputPath, outputPath) {
           filter: 'drawtext',
           options: {
             text: caption.replace(/:/g, '\\:'),
-            fontfile: 'fonts/NotoSans-Regular.ttf',
+            fontfile: hasEmoji ? 'fonts/NotoColorEmoji.ttf' : 'fonts/BebasNeue-Regular.ttf',
             fontcolor: 'white',
-            fontsize: 36,
+            fontsize: 44,
             x: '(w-text_w)/2',
             y: '(h-text_h)/2',
-            enable: 'between(t,1,4)'
+            enable: 'between(t,1,4)',
+            ...(hasEmoji ? {} : { borderw: 2, bordercolor: 'black' })
           }
         },
         { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
