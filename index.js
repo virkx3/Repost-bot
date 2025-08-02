@@ -53,7 +53,7 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   {
     filter: 'drawtext',
     options: {
-      text: caption.replace(/:/g, '\\:'),
+      text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
       fontfile: 'fonts/BebasNeue-Regular.ttf',
       fontcolor: 'white',
       fontsize: 44,
@@ -68,7 +68,7 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   {
     filter: 'drawtext',
     options: {
-      text: caption.replace(/:/g, '\\:'),
+      text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
       fontfile: 'fonts/NotoColorEmoji.ttf',
       fontsize: 44,
       x: '(w-text_w)/2',
