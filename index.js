@@ -83,35 +83,37 @@ function addWatermark(inputPath, outputPath) {
             boxborderw: 5
           }
         },
-        // Center overlay (2–3 seconds only) with emoji support, no background
-        {
-          filter: "drawtext",
-          options: {
-            fontfile: path.resolve(__dirname, "fonts/NotoColorEmoji.ttf"),
-            text: overlayText,
-            fontsize: 36,
-            fontcolor: "white",
-            x: "(w-text_w)/2",
-            y: "(h-text_h)/2",
-            enable: "between(t,1,4)"
-          }
-        },
-        // Slight brightness/contrast
-        {
-          filter: "eq",
-          options: "brightness=0.02:contrast=1.1"
-        },
-        // Light crop for copyright evasion
-        {
-          filter: "crop",
-          options: "iw*0.98:ih*0.98"
-        }
-      ])
-      .outputOptions([
-        "-preset veryfast",
-        "-threads 2",
-        "-max_muxing_queue_size 1024"
-      ])
+          // TEMP: comment out emoji center overlay until stable
+  /*
+  {
+    filter: "drawtext",
+    options: {
+      fontfile: path.resolve(__dirname, "fonts/NotoColorEmoji.ttf"),
+      text: overlayText,
+      fontsize: 36,
+      fontcolor: "white",
+      x: "(w-text_w)/2",
+      y: "(h-text_h)/2",
+      enable: "between(t,1,4)"
+    }
+  },
+  */
+
+  // Light crop + contrast filter (safe)
+  {
+    filter: "eq",
+    options: "brightness=0.02:contrast=1.1"
+  },
+  {
+    filter: "crop",
+    options: "iw*0.98:ih*0.98"
+  }
+])
+.outputOptions([
+  "-preset veryfast",
+  "-threads 1", // important for Railway memory limit
+  "-max_muxing_queue_size 1024"
+])
       .output(outputPath)
       .on("end", () => resolve(outputPath))
       .on("error", (err) => {
