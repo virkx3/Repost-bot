@@ -11,9 +11,4 @@ TZ = "Asia/Kolkata"
 NODE_ENV = "production"
 DISPLAY = ":99"
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome"
-
-[plugins]
-postgresql.enabled = false
-mongodb.enabled = false
-redis.enabled = false
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
