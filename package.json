@@ -1,15 +1,15 @@
 {
-  "name": "my-ig-bot",
+  "name": "ig-repost-bot",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "puppeteer": "^22.8.2",
-    "puppeteer-extra": "^3.3.4",
-    "puppeteer-extra-plugin-stealth": "^2.11.1",
-    "axios": "^1.6.8",
+    "puppeteer": "^22.11.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "axios": "^1.7.2",
     "fluent-ffmpeg": "^2.1.2",
     "fs-extra": "^11.2.0"
   }
