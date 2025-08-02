@@ -76,7 +76,7 @@ function addWatermark(inputPath, outputPath) {
             text: WATERMARK,
             fontsize: 24,
             fontcolor: "black",
-            x: "(w-text_w)-20",
+            x: "(w-text_w)-10",
             y: "(h-text_h)-20",
             box: 1,
             boxcolor: "white@1.0",
@@ -87,15 +87,17 @@ function addWatermark(inputPath, outputPath) {
   
   {
     filter: "drawtext",
-    options: {
-      fontfile: path.resolve(__dirname, "fonts/NotoSans-Regular.ttf"),
-      text: overlayText,
-      fontsize: 36,
-      fontcolor: "white",
-      x: "(w-text_w)/2",
-      y: "(h-text_h)/2",
-      enable: "between(t,1,4)"
-    }
+options: {
+  fontfile: path.resolve(__dirname, "fonts/ShinyCrystal-Yq3z4.ttf"),
+  text: overlayText,
+  fontsize: 36,
+  fontcolor: "white",
+  borderw: 2,                   // Stroke width
+  bordercolor: "black",         // Stroke color
+  x: "(w-text_w)/2",
+  y: "(h-text_h)/2",
+  enable: "between(t,1,4)"
+}
   },
   
 
