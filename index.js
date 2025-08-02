@@ -310,7 +310,7 @@ function isSleepTime() {
   const now = new Date();
   const hours = now.getHours();
   // Sleep between 10 PM (22) and 9 AM (9)
-  return hours >= 23 || hours < 9;
+  return hours >= 24 || hours < 9;
 }
 
 async function handleSleepTime() {
