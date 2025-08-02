@@ -1,9 +1,19 @@
-{
-  "build": {
-    "nixpacks": {
-      "config": {
-        "aptPackages": ["ffmpeg", "libfreetype6", "libfontconfig1", "fonts-noto-color-emoji"]
-      }
-    }
-  }
-}
+[build]
+builder = "dockerfile"
+dockerfilePath = "./Dockerfile"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 30
+
+[environment]
+TZ = "Asia/Kolkata"
+NODE_ENV = "production"
+DISPLAY = ":99"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome"
+
+[plugins]
+postgresql.enabled = false
+mongodb.enabled = false
+redis.enabled = false
