@@ -84,7 +84,7 @@ function addWatermark(inputPath, outputPath) {
           }
         },
           // TEMP: comment out emoji center overlay until stable
-  /*
+  
   {
     filter: "drawtext",
     options: {
@@ -97,7 +97,7 @@ function addWatermark(inputPath, outputPath) {
       enable: "between(t,1,4)"
     }
   },
-  */
+  
 
   // Light crop + contrast filter (safe)
   {
