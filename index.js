@@ -61,7 +61,32 @@ async function fetchUsernames() {
 
 function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
-    const command = ffmpeg(inputPath)
+    console.log(`🔄 Starting FFmpeg processing for: ${inputPath}`);
+    
+    // Use absolute paths
+    const absoluteInput = path.resolve(inputPath);
+    const absoluteOutput = path.resolve(outputPath);
+    console.log(`📁 Input: ${absoluteInput}`);
+    console.log(`📁 Output: ${absoluteOutput}`);
+
+    const command = ffmpeg(absoluteInput)
+      .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
+      .on('progress', progress => console.log(`⏱ Processing: ${Math.round(progress.percent)}% done`))
+      .on('stderr', line => console.log('📝 FFmpeg stderr:', line))
+      .on('stdout', line => console.log('📝 FFmpeg stdout:', line))
+      .on('end', () => {
+        console.log('✅ FFmpeg finished successfully');
+        resolve(absoluteOutput);
+      })
+      .on('error', (err, stdout, stderr) => {
+        console.error('❌ FFmpeg error:', err.message);
+        console.error('❌ FFmpeg stdout:', stdout);
+        console.error('❌ FFmpeg stderr:', stderr);
+        reject(err);
+      });
+
+    // Apply filters one by one
+    command
       .videoFilter({
         filter: 'drawtext',
         options: {
@@ -96,17 +121,9 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
         '-threads 2',
         '-max_muxing_queue_size 1024'
       ])
-      .output(outputPath);
+      .output(absoluteOutput);
 
-    command
-      .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
-      .on('stderr', line => console.log('📝 FFmpeg log:', line))
-      .on('end', () => resolve(outputPath))
-      .on('error', err => {
-        console.error('❌ FFmpeg error:', err.message);
-        reject(err);
-      })
-      .run();
+    command.run();
   });
 }
 
