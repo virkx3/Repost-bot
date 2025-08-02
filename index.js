@@ -62,56 +62,44 @@ async function fetchUsernames() {
 function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
     console.log(`🔄 Starting FFmpeg processing for: ${inputPath}`);
-    const absoluteInput = path.resolve(inputPath);
-    const absoluteOutput = path.resolve(outputPath);
-    console.log(`📁 Input: ${absoluteInput}`);
-    console.log(`📁 Output: ${absoluteOutput}`);
+    
+    // Use system fallback fonts
+    const primaryFont = fs.existsSync(path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf')) 
+      ? path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf')
+      : '/usr/share/fonts/truetype/freefont/FreeSans.ttf';
+      
+    const emojiFont = fs.existsSync(path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf')) 
+      ? path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf')
+      : '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf';
 
-    const command = ffmpeg(absoluteInput)
-      .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
-      .on('progress', progress => console.log(`⏱ Processing: ${Math.round(progress.percent)}% done`))
-      .on('stderr', line => console.log('📝 FFmpeg stderr:', line))
-      .on('stdout', line => console.log('📝 FFmpeg stdout:', line))
-      .on('end', () => {
-        console.log('✅ FFmpeg finished successfully');
-        resolve(absoluteOutput);
-      })
-      .on('error', (err, stdout, stderr) => {
-        console.error('❌ FFmpeg error:', err.message);
-        console.error('❌ FFmpeg stdout:', stdout);
-        console.error('❌ FFmpeg stderr:', stderr);
-        reject(err);
-      });
-
-    // Only one drawtext for now
-    command
+    const command = ffmpeg(inputPath)
       .videoFilter({
         filter: 'drawtext',
         options: {
           text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-          fontfile: path.join(__dirname, 'fonts', 'BebasNeue-Regular.ttf'),
+          fontfile: primaryFont,
           fontcolor: 'white',
-          fontsize: 44,
+          fontsize: 36, // Reduced from 44
           x: '(w-text_w)/2',
           y: '(h-text_h)/2',
           enable: 'between(t,1,4)',
           box: 1,
           boxcolor: 'black@0.6',
-          boxborderw: 10
+          boxborderw: 8
         }
       })
-      // .videoFilter({
-      //   filter: 'drawtext',
-      //   options: {
-      //     text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
-      //     fontfile: path.join(__dirname, 'fonts', 'NotoColorEmoji.ttf'),
-      //     fontsize: 44,
-      //     x: '(w-text_w)/2',
-      //     y: '(h-text_h)/2',
-      //     fontcolor: 'white',
-      //     enable: 'between(t,1,4)'
-      //   }
-      // })
+      .videoFilter({
+        filter: 'drawtext',
+        options: {
+          text: caption.replace(/:/g, '\\:').replace(/'/g, "\\'"),
+          fontfile: emojiFont,
+          fontsize: 36, // Reduced from 44
+          x: '(w-text_w)/2',
+          y: '(h-text_h)/2',
+          fontcolor: 'white',
+          enable: 'between(t,1,4)'
+        }
+      })
       .videoFilter('eq=brightness=0.02:contrast=1.1')
       .videoFilter('crop=iw*0.98:ih*0.98')
       .outputOptions([
@@ -119,7 +107,19 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
         '-threads 2',
         '-max_muxing_queue_size 1024'
       ])
-      .output(absoluteOutput);
+      .output(outputPath)
+      .on('start', cmd => console.log('▶️ FFmpeg command:', cmd))
+      .on('end', () => {
+        console.log('✅ FFmpeg finished successfully');
+        resolve(outputPath);
+      })
+      .on('error', (err, stdout, stderr) => {
+        console.error('❌ FFmpeg error:', err.message);
+        console.error('❌ FFmpeg stdout:', stdout);
+        console.error('❌ FFmpeg stderr:', stderr);
+        reject(err);
+      })
+      .on('stderr', line => console.log('📝 FFmpeg log:', line));
 
     command.run();
   });
