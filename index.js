@@ -52,6 +52,16 @@ function getRandomOverlayText() {
   return overlays[Math.floor(Math.random() * overlays.length)];
 }
 
+function getRandomOverlayText() {
+  const overlays = fs.readFileSync("overlay.txt", "utf8").split("\n").filter(Boolean);
+  const raw = overlays[Math.floor(Math.random() * overlays.length)];
+
+  return raw
+    .replace(/[:\\]/g, "\\$&")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"');
+}
+
 function addWatermark(inputPath, outputPath) {
   const overlayText = getRandomOverlayText();
 
@@ -85,11 +95,29 @@ function addWatermark(inputPath, outputPath) {
             y: "(h-text_h)/2",
             enable: "between(t,1,4)"
           }
+        },
+        // Slight brightness/contrast
+        {
+          filter: "eq",
+          options: "brightness=0.02:contrast=1.1"
+        },
+        // Light crop for copyright evasion
+        {
+          filter: "crop",
+          options: "iw*0.98:ih*0.98"
         }
+      ])
+      .outputOptions([
+        "-preset veryfast",
+        "-threads 2",
+        "-max_muxing_queue_size 1024"
       ])
       .output(outputPath)
       .on("end", () => resolve(outputPath))
-      .on("error", reject)
+      .on("error", (err) => {
+        console.error("❌ FFmpeg error:", err.message);
+        reject(err);
+      })
       .run();
   });
 }
