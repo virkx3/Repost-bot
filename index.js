@@ -46,32 +46,32 @@ async function fetchUsernames() {
 function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
-      .videoFilters([
-        {
-          filter: 'drawtext',
-          options: {
-            text: caption,
-            fontfile: '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
-            fontsize: 36,
-            fontcolor: 'white',
-            x: '(w-text_w)/2',
-            y: '(h-text_h)/2',
-            enable: 'between(t,1,4)'
-          }
-        },
-        {
-          filter: 'eq',
-          options: 'brightness=0.02:contrast=1.1'
-        },
-        {
-          filter: 'crop',
-          options: 'iw*0.98:ih*0.98'
-        }
-      ])
-      .output(outputPath)
-      .on('end', () => resolve(outputPath))
-      .on('error', reject)
-      .run();
+    ffmpeg(inputPath)
+  .videoFilters([
+    {
+      filter: 'drawtext',
+      options: {
+        text: caption,
+        fontfile: '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',
+        fontsize: 36,
+        fontcolor: 'white',
+        x: '(w-text_w)/2',
+        y: '(h-text_h)/2',
+        enable: 'between(t,1,4)'
+      }
+    },
+    { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
+    { filter: 'crop', options: 'iw*0.98:ih*0.98' }
+  ])
+  .outputOptions([
+    '-preset veryfast',
+    '-threads 2',
+    '-max_muxing_queue_size 1024'
+  ])
+  .output(outputPath)
+  .on('end', () => resolve(outputPath))
+  .on('error', reject)
+  .run();
   });
 }
 
