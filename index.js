@@ -2,6 +2,7 @@ const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fs = require("fs");
 const axios = require("axios");
+const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath("/usr/local/bin/ffmpeg");
 
