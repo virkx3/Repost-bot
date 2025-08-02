@@ -43,21 +43,23 @@ async function fetchUsernames() {
   return res.data.split("\n").map(u => u.trim()).filter(Boolean);
 }
 
-function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
+function addCaptionOverlayAndTransform(inputPath, outputPath) {
+  const captions = fs.readFileSync("overlay.txt", "utf8").split("\n").filter(Boolean);
+  const caption = captions[Math.floor(Math.random() * captions.length)];
+
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .videoFilters([
         {
           filter: 'drawtext',
           options: {
-            text: caption,
+            text: caption.replace(/:/g, '\\:'),
             fontfile: 'fonts/NotoSans-Regular.ttf',
             fontcolor: 'white',
             fontsize: 36,
             x: '(w-text_w)/2',
             y: '(h-text_h)/2',
-            enable: 'between(t,1,4)',
-            fallback_fonts: 'fonts/NotoColorEmoji.ttf,fonts/NotoSansDevanagari-Regular.ttf'
+            enable: 'between(t,1,4)'
           }
         },
         { filter: 'eq', options: 'brightness=0.02:contrast=1.1' },
@@ -70,10 +72,10 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
       ])
       .output(outputPath)
       .on('start', commandLine => {
-        console.log("FFmpeg command:", commandLine); // ✅ log command
+        console.log("FFmpeg command:", commandLine);
       })
       .on('stderr', stderrLine => {
-        console.log("FFmpeg stderr:", stderrLine); // ✅ log FFmpeg error
+        console.log("FFmpeg stderr:", stderrLine);
       })
       .on('end', () => resolve(outputPath))
       .on('error', err => {
