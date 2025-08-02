@@ -51,7 +51,7 @@ function addCaptionOverlayAndTransform(inputPath, outputPath, caption) {
           filter: 'drawtext',
           options: {
             text: caption,
-            fontfile: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            fontfile: '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf'
             fontsize: 36,
             fontcolor: 'white',
             x: '(w-text_w)/2',
