@@ -3,13 +3,9 @@ const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fs = require("fs");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
-const ffmpegPath = require("ffmpeg-static"); // This resolves to /usr/local/bin/ffmpeg if installed from Gyan.dev
-const path = require("path");
+ffmpeg.setFfmpegPath("/usr/local/bin/ffmpeg");
 
 puppeteer.use(StealthPlugin());
-
-// Set ffmpeg path only once
-ffmpeg.setFfmpegPath(ffmpegPath);
 
 const VIDEO_DIR = "downloads";
 const USED_REELS_FILE = "used_reels.json";
