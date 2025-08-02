@@ -354,7 +354,8 @@ async function main() {
       reelPath = await downloadFromIqsaved(page, randomReel);
       if (!reelPath) continue;
 
-      const captionText = getRandomCaption();
+      const overlayText = getRandomOverlay();  // From overlay.txt
+      const captionText = getRandomCaption();  // For Instagram caption
       const finalCaption = `${captionText}\n\nCredit @${username}\n${getRandomHashtags()}`;
 
       finalPath = reelPath.replace(".mp4", "_final.mp4");
