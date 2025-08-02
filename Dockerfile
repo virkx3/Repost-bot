@@ -5,20 +5,24 @@ ENV TZ=Asia/Kolkata
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install dependencies
+# Install dependencies with font fixes
 RUN apt-get update && \
     apt-get install -y \
     ffmpeg \
     libfreetype6 \
     libfontconfig1 \
     fonts-noto-color-emoji \
-    # Chrome dependencies
+    fonts-freefont-ttf \
+    fontconfig \
+    # Chromium dependencies
     chromium \
     # Xvfb for headless Chrome
     xvfb \
     # Cleanup
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Rebuild font cache
+    && fc-cache -fv
 
 # Set working directory
 WORKDIR /app
