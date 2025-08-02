@@ -5,6 +5,14 @@ const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const path = require("path");
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (_, res) => res.send('Bot is alive'));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Healthcheck server listening on port ${PORT}`);
+});
 
 puppeteer.use(StealthPlugin());
 ffmpeg.setFfmpegPath(ffmpegPath);
