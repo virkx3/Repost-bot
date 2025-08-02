@@ -1,25 +1,30 @@
 FROM node:18-slim
 
-# Timezone set karo
 ENV TZ=Asia/Kolkata
 
-# System update aur required packages install karo
+# Install dependencies and fonts (exclude ffmpeg)
 RUN apt-get update && apt-get install -y \
-  wget ca-certificates fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 \
-  libatk1.0-0 libcups2 libdbus-1-3 libdrm2 libx11-xcb1 libxcomposite1 libxdamage1 \
-  libxrandr2 libgbm1 libnspr4 libnss3 libxss1 libgtk-3-0 xdg-utils ffmpeg \
+  wget curl unzip ca-certificates \
   fonts-noto-color-emoji fonts-noto-cjk fonts-noto-mono fonts-noto-core \
   fonts-noto-unhinted fonts-noto-ui-core fonts-noto \
-  --no-install-recommends && apt-get clean && rm -rf /var/lib/apt/lists/*
+  libglib2.0-0 libnss3 libatk-bridge2.0-0 libx11-xcb1 libxcomposite1 libxdamage1 \
+  libxrandr2 libgbm1 libgtk-3-0 xdg-utils libasound2 libxss1 \
+  --no-install-recommends && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Working directory set karo
+# Install FFmpeg 6.1 static build
+RUN mkdir -p /opt/ffmpeg && \
+  curl -L https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-amd64-static.tar.xz | tar -xJ --strip-components=1 -C /opt/ffmpeg && \
+  ln -s /opt/ffmpeg/ffmpeg /usr/local/bin/ffmpeg
+
+# Set working directory
 WORKDIR /app
 
-# Project files copy karo
+# Copy project files
 COPY . .
 
-# Dependencies install karo
+# Install Node dependencies
 RUN npm install
 
-# Node app start karo
+# Start app
 CMD ["npm", "start"]
