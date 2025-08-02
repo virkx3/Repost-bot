@@ -1,11 +1,11 @@
 FROM node:18
 
-# Set timezone and environment variables
+# Set timezone and Puppeteer environment
 ENV TZ=Asia/Kolkata
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install dependencies with font fixes
+# Install dependencies (fonts, Chromium, FFmpeg)
 RUN apt-get update && \
     apt-get install -y \
     ffmpeg \
@@ -14,25 +14,22 @@ RUN apt-get update && \
     fonts-noto-color-emoji \
     fonts-freefont-ttf \
     fontconfig \
-    # Chromium dependencies
     chromium \
-    # Xvfb for headless Chrome
     xvfb \
-    # Cleanup
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    # Rebuild font cache
-    && fc-cache -fv
+    && apt-get clean && rm -rf /var/lib/apt/lists/* && fc-cache -fv
 
 # Set working directory
 WORKDIR /app
 
-# Install Node.js dependencies first for caching
+# Install Node.js dependencies first
 COPY package*.json ./
 RUN npm install
 
-# Copy application files
+# Copy application code
 COPY . .
 
-# Start Xvfb and run the application
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x16 & export DISPLAY=:99 && node index.js"]
+# Expose port for Railway healthcheck
+EXPOSE 3000
+
+# Start headless Xvfb + bot
+CMD bash -c "Xvfb :99 -screen 0 1024x768x16 & export DISPLAY=:99 && node index.js"
