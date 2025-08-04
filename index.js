@@ -316,10 +316,8 @@ async function cleanupFiles(filePaths) {
 }
 
 // ===== NEW: SLEEP TIME FUNCTIONS =====
-function isSleepTime() {
-  const now = new Date();
-  const hours = now.getHours();
-  // Sleep between 10 PM (22) and 9 AM (9)
+function isSleepTime(date = new Date()) {
+  const hours = date.getHours();
   return hours >= 22 || hours < 9;
 }
 
@@ -424,22 +422,23 @@ async function main() {
         console.log("✅ Reel added to used list");
       }
 
-      // === NEW FIXED 3-HOUR INTERVAL LOGIC ===
-      const nextPostTime = new Date();
-      nextPostTime.setHours(nextPostTime.getHours() + 3);
-      nextPostTime.setMinutes(0, 0, 0);
+      // === FIXED 3-HOUR INTERVAL LOGIC ===
+const now = new Date();
+let nextPostTime = new Date(now.getTime() + 3 * 60 * 60 * 1000); // +3 hours
 
-      if (nextPostTime.getHours() >= 22 || nextPostTime.getHours() < 9) {
-        // Skip overnight — resume at 9 AM next day
-        nextPostTime.setDate(nextPostTime.getDate() + 1);
-        nextPostTime.setHours(9, 0, 0, 0);
-      }
+// If nextPostTime lands in sleep window (10PM–9AM), push to next 9 AM
+if (nextPostTime.getHours() >= 22 || nextPostTime.getHours() < 9) {
+  if (nextPostTime.getHours() >= 22) {
+    // If after 10PM, move to tomorrow 9 AM
+    nextPostTime.setDate(nextPostTime.getDate() + 1);
+  }
+  nextPostTime.setHours(9, 0, 0, 0);
+}
 
-      const now = new Date();
-      const waitTime = nextPostTime - now;
-      console.log(`⏱️ Waiting until ${nextPostTime.toLocaleTimeString()} (~${Math.round(waitTime / 60000)} minutes)...`);
-      await delay(waitTime);
-
+const waitTime = nextPostTime - Date.now();
+console.log(`⏱️ Waiting until ${nextPostTime.toLocaleTimeString()} (~${Math.round(waitTime / 60000)} minutes)...`);
+await delay(waitTime);
+      
     } catch (err) {
       console.error("❌ Loop error:", err.message);
       await delay(180000, 60000); // 3–4 minute delay on error
